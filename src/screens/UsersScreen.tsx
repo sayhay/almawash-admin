@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native-paper';
 
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loader } from '../components/Loader';
 import { DataTable } from '../components/DataTable';
-import { useFetch } from '../hooks/useFetch';
-import { useMutation } from '../hooks/useMutation';
+import { useApi } from '../hooks/useApi';
+import { client } from '../api/client';
+import { ApiError } from '../api/errors';
 import { formatDate } from '../utils/formatters';
 import { USER_ROLES, USER_STATUSES } from '../utils/constants';
 import type { AdminUser, AdminUserRequest } from '../utils/types';
@@ -19,25 +20,49 @@ const UsersScreen: React.FC = () => {
   const [form, setForm] = useState<AdminUserRequest>({ email: '', phone: '', role: 'PROVIDER', active: true });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | undefined>();
+  const [saving, setSaving] = useState(false);
 
-  const { data, loading, error, refetch } = useFetch<AdminUser[]>(
-    '/api/admin/users',
-    { params: { role: roleFilter ?? undefined, status: statusFilter ?? undefined } },
-    [roleFilter, statusFilter],
-  );
+  const { run } = useApi();
 
-  const { mutate: createUser, loading: creating } = useMutation<AdminUser, AdminUserRequest>('post', '/api/admin/users');
-  const { mutate: updateUser, loading: updating } = useMutation<AdminUser, AdminUserRequest>('put');
-  const { mutate: removeUser } = useMutation<void>('delete');
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setFetchError(undefined);
+    try {
+      const response = await run(
+        client.get<AdminUser[]>('/api/admin/users', {
+          params: {
+            role: roleFilter ?? undefined,
+            status: statusFilter ?? undefined,
+          },
+        }),
+      );
+      setUsers(response.data ?? []);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setFetchError(error.message);
+      } else {
+        setFetchError('Une erreur est survenue');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [roleFilter, run, statusFilter]);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
 
   const filteredUsers = useMemo(() => {
-    if (!data) return [];
-    return data.filter((user) => {
+    if (!users) return [];
+    return users.filter((user) => {
       const roleMatch = roleFilter ? user.role === roleFilter : true;
       const statusMatch = statusFilter ? `${user.active ? 'ACTIVE' : 'INACTIVE'}` === statusFilter : true;
       return roleMatch && statusMatch;
     });
-  }, [data, roleFilter, statusFilter]);
+  }, [users, roleFilter, statusFilter]);
 
   const openModal = (user?: AdminUser) => {
     if (user) {
@@ -62,29 +87,44 @@ const UsersScreen: React.FC = () => {
       return;
     }
     setErrors({});
+    setSaving(true);
     try {
       if (editing) {
-        await updateUser(form, { url: `/api/admin/users/${editing.id}` });
+        await run(client.put(`/api/admin/users/${editing.id}`, form));
       } else {
-        await createUser(form);
+        await run(client.post('/api/admin/users', form));
       }
       closeModal();
-      refetch();
-    } catch (err) {
-      setErrors({ general: err?.response?.data?.message ?? 'Erreur lors de la sauvegarde' });
+      await fetchUsers();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.details && Object.keys(error.details).length > 0) {
+          setErrors(error.details);
+        } else {
+          setErrors({ general: error.message });
+        }
+      } else {
+        setErrors({ general: 'Erreur lors de la sauvegarde' });
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (user: AdminUser) => {
     try {
-      await removeUser(undefined, { url: `/api/admin/users/${user.id}` });
-      refetch();
-    } catch (err) {
-      setErrors({ general: err?.response?.data?.message ?? 'Impossible de supprimer cet utilisateur' });
+      await run(client.delete(`/api/admin/users/${user.id}`));
+      await fetchUsers();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrors({ general: error.message });
+      } else {
+        setErrors({ general: 'Impossible de supprimer cet utilisateur' });
+      }
     }
   };
 
-  if (loading && !data) {
+  if (loading && users.length === 0) {
     return <Loader />;
   }
 
@@ -119,7 +159,7 @@ const UsersScreen: React.FC = () => {
           </View>
         </View>
 
-        {error ? <ErrorMessage message={error} /> : null}
+        {fetchError ? <ErrorMessage message={fetchError} /> : null}
 
         <DataTable<AdminUser>
           data={filteredUsers}
@@ -198,14 +238,14 @@ const UsersScreen: React.FC = () => {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={closeModal}>Annuler</Button>
-            <Button onPress={handleSubmit} loading={creating || updating}>
+            <Button onPress={handleSubmit} loading={saving}>
               Enregistrer
             </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
 
-      <FAB icon="plus" style={styles.fab} onPress={() => openModal()} loading={creating || updating} />
+      <FAB icon="plus" style={styles.fab} onPress={() => openModal()} loading={saving} />
     </View>
   );
 };
