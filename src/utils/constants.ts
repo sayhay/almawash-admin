@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 
 export const API_BASE_URL =
   (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl ??
-  'http://localhost:8080';
+  'http://192.168.1.88:8080';
 
 export const PAGE_SIZE = 10;
 

@@ -1,17 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-
 import { client, setUnauthorizedHandler } from '../api/client';
 import {
   REFRESH_TOKEN_STORAGE_KEY,
   TOKEN_STORAGE_KEY,
-  USER_ROLES,
+  USER_ROLES
 } from '../utils/constants';
 import type {
   AuthUser,
   LoginCredentials,
-  UserProfile,
+  UserProfile
 } from '../utils/types';
+
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = useCallback(async () => {
     try {
-      const { data } = await client.get<UserProfile>('/api/users/me');
+      const { data } = await client.get<UserProfile>('/api/auth/me');
       const profile = normalizeUser(data);
       setUser(profile);
       return profile;

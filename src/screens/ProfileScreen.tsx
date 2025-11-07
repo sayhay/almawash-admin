@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Switch, Text, TextInput } from 'react-native-paper';
-
 import { useAuth } from '../auth/useAuth';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loader } from '../components/Loader';
@@ -11,10 +10,11 @@ import { useThemeMode } from '../utils/ThemeContext';
 import type { PasswordUpdatePayload, UserProfile } from '../utils/types';
 import { validatePasswordChange } from '../utils/validation';
 
+
 const ProfileScreen: React.FC = () => {
   const { user, setUser } = useAuth();
   const { mode, toggle } = useThemeMode();
-  const { data, loading, refetch } = useFetch<UserProfile>('/api/users/me', undefined, []);
+  const { data, loading, refetch } = useFetch<UserProfile>('/api/auth/me', undefined, []);
   const { mutate: updatePassword, loading: saving } = useMutation<void, PasswordUpdatePayload>('put', '/api/users/me/password');
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
