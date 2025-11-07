@@ -10,6 +10,8 @@ import LoginScreen from './screens/LoginScreen';
 import { Loader } from './components/Loader';
 import { ThemeProvider, useThemeMode } from './utils/ThemeContext';
 import { darkTheme, lightTheme } from './utils/theme';
+import { NotificationsProvider } from './ui/notifications/NotificationsProvider';
+import ErrorBoundary from './ui/ErrorBoundary';
 
 const AppContent: React.FC = () => {
   const { mode } = useThemeMode();
@@ -44,7 +46,11 @@ const AppContent: React.FC = () => {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <NavigationContainer theme={navigationTheme}>{hasAdminAccess ? <AdminNavigator /> : <LoginScreen />}</NavigationContainer>
+      <NotificationsProvider>
+        <NavigationContainer theme={navigationTheme}>
+          {hasAdminAccess ? <AdminNavigator /> : <LoginScreen />}
+        </NavigationContainer>
+      </NotificationsProvider>
     </PaperProvider>
   );
 };
@@ -58,9 +64,11 @@ const Providers: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const App: React.FC = () => (
-  <Providers>
-    <AppContent />
-  </Providers>
+  <ErrorBoundary>
+    <Providers>
+      <AppContent />
+    </Providers>
+  </ErrorBoundary>
 );
 
 export default App;

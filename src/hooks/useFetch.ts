@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import axios, { type AxiosRequestConfig } from 'axios';
+import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
+import { ApiError } from '../api/errors';
 import { client } from '../api/client';
+import { useApi } from './useApi';
 
 interface FetchState<T> {
   data: T | undefined;
@@ -16,6 +18,7 @@ export const useFetch = <T>(
 ) => {
   const [state, setState] = useState<FetchState<T>>({ data: undefined, loading: false, error: undefined });
   const abortController = useRef<AbortController | null>(null);
+  const { run } = useApi();
 
   const fetchData = useCallback(async () => {
     if (!url) {
@@ -27,19 +30,25 @@ export const useFetch = <T>(
 
     setState((prev) => ({ ...prev, loading: true, error: undefined }));
     try {
-      const response = await client.get<T>(url, {
-        signal: controller.signal,
-        ...options,
-      });
+      const response = (await run(
+        client.get<T>(url, {
+          signal: controller.signal,
+          ...options,
+        }),
+      )) as AxiosResponse<T>;
       setState({ data: response.data, loading: false, error: undefined });
     } catch (error: any) {
       if (axios.isCancel?.(error)) {
         return;
       }
-      const message = error?.response?.data?.message ?? error?.message ?? 'Une erreur est survenue';
+      if (error instanceof ApiError) {
+        setState({ data: undefined, loading: false, error: error.message });
+        return;
+      }
+      const message = error?.message ?? 'Une erreur est survenue';
       setState({ data: undefined, loading: false, error: message });
     }
-  }, [url, JSON.stringify(options)]);
+  }, [run, url, JSON.stringify(options)]);
 
   useEffect(() => {
     fetchData();

@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
-import type { AxiosRequestConfig } from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 
+import { ApiError } from '../api/errors';
 import { client } from '../api/client';
 import type { MutationMethod } from '../utils/types';
+import { useApi } from './useApi';
 
 interface MutationState<T> {
   loading: boolean;
@@ -16,30 +18,34 @@ export const useMutation = <T, P = unknown>(
   defaultConfig?: AxiosRequestConfig,
 ) => {
   const [state, setState] = useState<MutationState<T>>({ loading: false, error: undefined, data: undefined });
+  const { run } = useApi();
 
   const mutate = useCallback(
     async (payload?: P, config?: AxiosRequestConfig) => {
-      if (!url) {
+      const requestUrl = config?.url ?? url;
+      if (!requestUrl) {
         throw new Error('URL manquante pour la mutation');
       }
       setState({ loading: true, error: undefined, data: undefined });
       try {
-        const response = await client.request<T>({
-          url,
-          method,
-          data: payload,
-          ...defaultConfig,
-          ...config,
-        });
+        const response = (await run(
+          client.request<T>({
+            url: requestUrl,
+            method,
+            data: payload,
+            ...defaultConfig,
+            ...config,
+          }),
+        )) as AxiosResponse<T>;
         setState({ loading: false, error: undefined, data: response.data });
         return response.data;
       } catch (error: any) {
-        const message = error?.response?.data?.message ?? error?.message ?? 'Une erreur est survenue';
+        const message = error instanceof ApiError ? error.message : error?.message ?? 'Une erreur est survenue';
         setState({ loading: false, error: message, data: undefined });
         throw error;
       }
     },
-    [method, url, defaultConfig],
+    [defaultConfig, method, run, url],
   );
 
   return { ...state, mutate };

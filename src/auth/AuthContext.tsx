@@ -4,14 +4,13 @@ import { client, setUnauthorizedHandler } from '../api/client';
 import {
   REFRESH_TOKEN_STORAGE_KEY,
   TOKEN_STORAGE_KEY,
-  USER_ROLES
+  USER_ROLES,
 } from '../utils/constants';
 import type {
   AuthUser,
   LoginCredentials,
   UserProfile
 } from '../utils/types';
-
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -38,6 +37,41 @@ const normalizeUser = (payload: any): UserProfile => ({
   createdAt: payload?.createdAt ?? undefined,
 });
 
+const isBrowser = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
+const getLocalStorageItem = (key: string) => {
+  if (!isBrowser) {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    return null;
+  }
+};
+
+const setLocalStorageItem = (key: string, value: string) => {
+  if (!isBrowser) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    // noop
+  }
+};
+
+const removeLocalStorageItem = (key: string) => {
+  if (!isBrowser) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    // noop
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +80,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearSession = useCallback(async () => {
     await AsyncStorage.multiRemove([TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY]);
+    removeLocalStorageItem(TOKEN_STORAGE_KEY);
+    removeLocalStorageItem(REFRESH_TOKEN_STORAGE_KEY);
     setUser(null);
   }, []);
 
@@ -65,7 +101,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadSession = useCallback(async () => {
     try {
-      const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      let token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!token) {
+        const localToken = getLocalStorageItem(TOKEN_STORAGE_KEY);
+        if (localToken) {
+          token = localToken;
+          await AsyncStorage.setItem(TOKEN_STORAGE_KEY, localToken);
+        }
+      }
       if (token) {
         const profile = await fetchProfile();
         if (profile.role !== 'ADMIN') {
@@ -90,8 +133,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error("Le token d'authentification est manquant");
         }
         await AsyncStorage.setItem(TOKEN_STORAGE_KEY, jwt);
+        setLocalStorageItem(TOKEN_STORAGE_KEY, jwt);
         if (refresh) {
           await AsyncStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh);
+          setLocalStorageItem(REFRESH_TOKEN_STORAGE_KEY, refresh);
         }
         try {
           const profile = await fetchProfile();
@@ -111,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
     },
-    [fetchProfile],
+    [clearSession, fetchProfile],
   );
 
   const logout = useCallback(async () => {
@@ -119,7 +164,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [clearSession]);
 
   const refreshToken = useCallback(async () => {
-    const refresh = await AsyncStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    let refresh = await AsyncStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+    if (!refresh) {
+      refresh = getLocalStorageItem(REFRESH_TOKEN_STORAGE_KEY);
+    }
     if (!refresh) return;
     setIsRefreshing(true);
     try {
@@ -128,9 +176,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newRefresh = data?.refreshToken ?? refresh;
       if (newToken) {
         await AsyncStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+        setLocalStorageItem(TOKEN_STORAGE_KEY, newToken);
       }
       if (newRefresh) {
         await AsyncStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, newRefresh);
+        setLocalStorageItem(REFRESH_TOKEN_STORAGE_KEY, newRefresh);
       }
     } catch (error) {
       await clearSession();
@@ -141,7 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      clearSession();
+      void clearSession();
     });
     loadSession();
 
