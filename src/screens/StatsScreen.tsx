@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, Text } from 'react-native-paper';
+import { ScrollView, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@shopify/restyle';
 
 import { ChartView } from '@/components/ChartView';
 import { ErrorMessage } from '@/components/ErrorMessage';
@@ -10,8 +11,15 @@ import { DataGridX, GridColumn } from '@/ui/table';
 import { useFetch } from '@/hooks/useFetch';
 import { formatCurrencyEUR } from '@/utils/format';
 import type { AdminStatsResponse, RevenuePoint, TopProvider } from '@/utils/types';
+import type { AppTheme } from '@/theme';
+import { Box } from '@/theme';
+import { Section } from '@/ui/Section';
+import { Surface } from '@/ui/Surface';
+import { StatCard } from '@/ui/StatCard';
+import { PrimaryButton } from '@/ui/PrimaryButton';
 
 const StatsScreen: React.FC = () => {
+  const theme = useTheme<AppTheme>();
   const {
     data: stats,
     loading,
@@ -98,53 +106,86 @@ const StatsScreen: React.FC = () => {
     [],
   );
 
+  const summaryCards = useMemo(
+    () => [
+      {
+        key: 'users',
+        label: 'Utilisateurs',
+        value: stats?.totalUsers ?? 0,
+        icon: (
+          <MaterialCommunityIcons name="account-group" size={24} color={theme.colors.info} />
+        ),
+        tone: 'info' as const,
+      },
+      {
+        key: 'providers',
+        label: 'Prestataires actifs',
+        value: stats?.activeProviders ?? 0,
+        icon: (
+          <MaterialCommunityIcons name="briefcase-check" size={24} color={theme.colors.success} />
+        ),
+        tone: 'success' as const,
+      },
+      {
+        key: 'bookings',
+        label: 'Réservations',
+        value: stats?.totalBookings ?? 0,
+        icon: (
+          <MaterialCommunityIcons name="calendar-month" size={24} color={theme.colors.warning} />
+        ),
+        tone: 'warning' as const,
+      },
+      {
+        key: 'completed',
+        label: 'Terminées',
+        value: stats?.completedBookings ?? 0,
+        icon: (
+          <MaterialCommunityIcons name="check-decagram" size={24} color={theme.colors.success} />
+        ),
+        tone: 'success' as const,
+      },
+    ],
+    [stats, theme.colors.info, theme.colors.success, theme.colors.warning],
+  );
+
+  const contentPadding = theme.spacing.lg;
+  const backgroundColor = theme.colors.background;
+
   if (loading && !stats) {
     return <Loader />;
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={[styles.container, { padding: contentPadding }]}
+      style={{ backgroundColor }}
+    >
       {error ? (
-        <Card style={styles.errorCard}>
-          <Card.Content>
-            <ErrorMessage message={error} />
-            <Button onPress={refetch}>Réessayer</Button>
-          </Card.Content>
-        </Card>
+        <Surface marginBottom="xl">
+          <ErrorMessage message={error} />
+          <Box marginTop="md">
+            <PrimaryButton label="Réessayer" onPress={refetch} />
+          </Box>
+        </Surface>
       ) : null}
 
-      <View style={styles.summary}>
-        <Card style={styles.summaryCard}>
-          <Card.Content>
-            <Text variant="labelLarge">Utilisateurs</Text>
-            <Text variant="headlineMedium">{stats?.totalUsers ?? 0}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={styles.summaryCard}>
-          <Card.Content>
-            <Text variant="labelLarge">Prestataires actifs</Text>
-            <Text variant="headlineMedium">{stats?.activeProviders ?? 0}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={styles.summaryCard}>
-          <Card.Content>
-            <Text variant="labelLarge">Réservations</Text>
-            <Text variant="headlineMedium">{stats?.totalBookings ?? 0}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={styles.summaryCard}>
-          <Card.Content>
-            <Text variant="labelLarge">Terminé</Text>
-            <Text variant="headlineMedium">{stats?.completedBookings ?? 0}</Text>
-          </Card.Content>
-        </Card>
-      </View>
+      <Section
+        title="Indicateurs clés"
+        subtitle="Vue d'ensemble de l'activité Almawash"
+      >
+        <Box style={styles.summaryGrid}>
+          {summaryCards.map((card) => (
+            <Box key={card.key} style={styles.summaryItem}>
+              <StatCard icon={card.icon} label={card.label} value={card.value} tone={card.tone} />
+            </Box>
+          ))}
+        </Box>
+      </Section>
 
       <ChartView title="Revenus" data={revenuePoints} />
 
-      <Card style={styles.revenueCard}>
-        <Card.Title title="Répartition des revenus" subtitle="Montants mensuels" />
-        <Card.Content style={styles.tableContent}>
+      <Section title="Répartition des revenus" subtitle="Montants mensuels">
+        <Box style={styles.tableContainer}>
           <DataGridX<RevenuePoint & { id: string }>
             rows={revenueRows}
             columns={revenueColumns}
@@ -157,50 +198,38 @@ const StatsScreen: React.FC = () => {
             onSortModelChange={revenueServerMode ? setRevenueSortModel : undefined}
             emptyText="Aucune donnée de revenus"
           />
-        </Card.Content>
-      </Card>
+        </Box>
+      </Section>
 
-      <Card style={styles.providersCard}>
-        <Card.Title title="Top prestataires" />
-        <Card.Content style={styles.tableContent}>
+      <Section title="Top prestataires" subtitle="Classement par réservations complétées">
+        <Box style={styles.tableContainer}>
           <DataGridX<TopProvider & { id: string }>
             rows={(stats?.topProviders ?? []).map((provider, index) => ({ ...provider, id: `${provider.name}-${index}` }))}
             columns={providerColumns}
             emptyText="Aucun prestataire"
           />
-        </Card.Content>
-      </Card>
+        </Box>
+      </Section>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    paddingBottom: 32,
   },
-  summary: {
+  summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 16,
+    gap: 16,
   },
-  summaryCard: {
-    flex: 1,
+  summaryItem: {
+    flexGrow: 1,
+    flexBasis: '48%',
     minWidth: 160,
-    marginRight: 12,
-    marginBottom: 12,
   },
-  errorCard: {
-    marginBottom: 16,
-  },
-  revenueCard: {
-    marginTop: 12,
-  },
-  providersCard: {
-    marginTop: 12,
-  },
-  tableContent: {
+  tableContainer: {
     minWidth: 0,
-    alignSelf: 'stretch',
   },
 });
 

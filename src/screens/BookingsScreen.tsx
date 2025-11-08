@@ -12,6 +12,9 @@ import type { BookingItem } from '@/utils/types';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { Loader } from '@/components/Loader';
 import { useMutation } from '@/hooks/useMutation';
+import { Box } from '@/theme';
+import { Section } from '@/ui/Section';
+import { PrimaryButton } from '@/ui/PrimaryButton';
 
 const statusLabels: Record<string, string> = {
   PENDING: 'En attente',
@@ -198,85 +201,99 @@ const BookingsScreen: React.FC = () => {
     [handleDelete, openStatusDialog],
   );
 
+  const handleExport = useCallback(() => {
+    // TODO: brancher l'export CSV dès que l'endpoint sera disponible
+  }, []);
+
   if (loading && rows.length === 0) {
     return <Loader />;
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.gridContainer}>
-        <DataGridX<BookingRow>
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          rowCount={rowCount}
-          serverMode
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          sortModel={sortModel}
-          onSortModelChange={setSortModel}
-          emptyText="Aucune réservation"
-          toolbar={
-            <ServerToolbar
-              searchPlaceholder="Rechercher (email, service...)"
-              searchValue={search}
-              onSearch={(query) => setSearch(query || undefined)}
-              filters={[
-                {
-                  key: 'status',
-                  label: 'Statut',
-                  value: filter?.status ?? undefined,
-                  options: [
-                    { label: 'Tous', value: undefined },
-                    ...BOOKING_STATUSES.map((status) => ({ label: statusLabels[status] ?? status, value: status })),
-                  ],
-                  onChange: (value) => {
-                    setFilter((prev) => ({ ...(prev ?? {}), status: typeof value === 'string' ? value : undefined }));
-                  },
+    <Box flex={1} padding="lg" backgroundColor="background">
+      <Section
+        title="Réservations"
+        subtitle="Suivez et filtrez les réservations en temps réel"
+        actions={
+          <Box style={styles.sectionActions}>
+            <PrimaryButton label="Export CSV" onPress={handleExport} />
+          </Box>
+        }
+      >
+        <Box marginBottom="md">
+          <ServerToolbar
+            searchPlaceholder="Rechercher (email, service...)"
+            searchValue={search}
+            onSearch={(query) => setSearch(query || undefined)}
+            filters={[
+              {
+                key: 'status',
+                label: 'Statut',
+                value: filter?.status ?? undefined,
+                options: [
+                  { label: 'Tous', value: undefined },
+                  ...BOOKING_STATUSES.map((status) => ({ label: statusLabels[status] ?? status, value: status })),
+                ],
+                onChange: (value) => {
+                  setFilter((prev) => ({ ...(prev ?? {}), status: typeof value === 'string' ? value : undefined }));
                 },
-              ]}
-              onReset={() => {
-                setFilter(() => undefined);
-                setSearch(undefined);
-                setSortModel([]);
-                setPaginationModel((prev) => ({ ...prev, page: 0 }));
-                setProviderIdInput('');
-                setClientIdInput('');
-                setDateInput('');
-              }}
-              actions={
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbarActions}>
-                  <TextInput
-                    mode="outlined"
-                    label="Prestataire ID"
-                    value={providerIdInput}
-                    onChangeText={setProviderIdInput}
-                    style={styles.filterInput}
-                  />
-                  <TextInput
-                    mode="outlined"
-                    label="Client ID"
-                    value={clientIdInput}
-                    onChangeText={setClientIdInput}
-                    style={styles.filterInput}
-                  />
-                  <TextInput
-                    mode="outlined"
-                    label="Date"
-                    placeholder="YYYY-MM-DD"
-                    value={dateInput}
-                    onChangeText={setDateInput}
-                    style={styles.filterInput}
-                  />
-                  <Button mode="contained-tonal" onPress={applyAdvancedFilters}>
-                    Appliquer
-                  </Button>
-                </ScrollView>
-              }
-            />
-          }
-        />
-      </View>
+              },
+            ]}
+            onReset={() => {
+              setFilter(() => undefined);
+              setSearch(undefined);
+              setSortModel([]);
+              setPaginationModel((prev) => ({ ...prev, page: 0 }));
+              setProviderIdInput('');
+              setClientIdInput('');
+              setDateInput('');
+            }}
+            actions={
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbarActions}>
+                <TextInput
+                  mode="outlined"
+                  label="Prestataire ID"
+                  value={providerIdInput}
+                  onChangeText={setProviderIdInput}
+                  style={styles.filterInput}
+                />
+                <TextInput
+                  mode="outlined"
+                  label="Client ID"
+                  value={clientIdInput}
+                  onChangeText={setClientIdInput}
+                  style={styles.filterInput}
+                />
+                <TextInput
+                  mode="outlined"
+                  label="Date"
+                  placeholder="YYYY-MM-DD"
+                  value={dateInput}
+                  onChangeText={setDateInput}
+                  style={styles.filterInput}
+                />
+                <Button mode="contained-tonal" onPress={applyAdvancedFilters}>
+                  Appliquer
+                </Button>
+              </ScrollView>
+            }
+          />
+        </Box>
+        <Box style={styles.gridContainer}>
+          <DataGridX<BookingRow>
+            rows={rows}
+            columns={columns}
+            loading={loading}
+            rowCount={rowCount}
+            serverMode
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            sortModel={sortModel}
+            onSortModelChange={setSortModel}
+            emptyText="Aucune réservation"
+          />
+        </Box>
+      </Section>
 
       <Portal>
         <Dialog visible={dialogVisible} onDismiss={closeDialog}>
@@ -302,17 +319,11 @@ const BookingsScreen: React.FC = () => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </View>
+    </Box>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    minWidth: 0,
-    minHeight: 0,
-  },
   gridContainer: {
     flex: 1,
     width: '100%',
@@ -344,6 +355,11 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     marginVertical: 4,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
 });
 

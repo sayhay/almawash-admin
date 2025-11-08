@@ -42,6 +42,39 @@ To learn more about developing your project with Expo, look at the following res
 - [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
 - [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
+## Design System & Thème
+
+Le thème vert unifié (Restyle + React Native Paper + MUI Data Grid) est centralisé dans `src/theme`.
+
+### Vérifier l'intégration
+
+1. Installez les dépendances si nécessaire :
+
+   ```bash
+   npm install
+   ```
+
+2. Démarrez l'application :
+
+   ```bash
+   npx expo start
+   ```
+
+3. Testez les écrans mobiles (Expo Go / simulateur) et web (`w` dans le terminal) pour valider :
+
+   - la cohérence des couleurs (boutons, surfaces, fonds) en mode clair et sombre ;
+   - le rendu des composants unifiés (`Surface`, `Section`, `StatCard`, `PrimaryButton`).
+
+4. Sur le web, ouvrez les écrans **Utilisateurs** et **Réservations** et vérifiez que la MUI Data Grid applique bien la palette verte (header gras, hover, sélection) et que la barre d’actions (recherche, filtres, export) reste fonctionnelle.
+
+5. Dans le dashboard/les stats, assurez-vous que les `StatCard` reflètent les données et que les cartes/charts sont bien intégrées dans les surfaces Restyle.
+
+6. Exécutez le linter avant de pousser :
+
+   ```bash
+   npm run lint
+   ```
+
 ## Join the community
 
 Join our community of developers creating universal apps.
