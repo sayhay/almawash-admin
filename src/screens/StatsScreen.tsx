@@ -101,7 +101,7 @@ const StatsScreen: React.FC = () => {
 
       <Card style={styles.revenueCard}>
         <Card.Title title="Répartition des revenus" subtitle="Montants mensuels" />
-        <Card.Content>
+        <Card.Content style={styles.tableContent}>
           <DataGridX<RevenuePoint & { id: string }>
             rows={revenuePoints.map((point) => ({ ...point, id: point.month }))}
             columns={revenueColumns}
@@ -112,7 +112,7 @@ const StatsScreen: React.FC = () => {
 
       <Card style={styles.providersCard}>
         <Card.Title title="Top prestataires" />
-        <Card.Content>
+        <Card.Content style={styles.tableContent}>
           <DataGridX<TopProvider & { id: string }>
             rows={(stats?.topProviders ?? []).map((provider, index) => ({ ...provider, id: `${provider.name}-${index}` }))}
             columns={providerColumns}
@@ -147,6 +147,10 @@ const styles = StyleSheet.create({
   },
   providersCard: {
     marginTop: 12,
+  },
+  tableContent: {
+    minWidth: 0,
+    alignSelf: 'stretch',
   },
 });
 

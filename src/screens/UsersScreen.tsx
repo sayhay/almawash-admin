@@ -6,7 +6,7 @@ import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native
 import client from '@/api/client';
 import { ApiError } from '@/api/errors';
 import { useApi } from '@/hooks/useApi';
-import { useServerGrid } from '@/hooks/useServerGrid';
+import { useServerGrid, type UseServerGridParams } from '@/hooks/useServerGrid';
 import { DataGridX, GridColumn, ServerToolbar } from '@/ui/table';
 import { formatDate, formatPhone } from '@/utils/format';
 import { USER_ROLES, USER_STATUSES } from '@/utils/constants';
@@ -87,9 +87,8 @@ const UsersScreen: React.FC = () => {
 
   const { run } = useApi();
 
-  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } = useServerGrid<UserRow, UsersFilter | undefined>({
-    initialPageSize: 10,
-    fetchPage: async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
+  const fetchUsersPage = useCallback<UseServerGridParams<UsersFilter | undefined>['fetchPage']>(
+    async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
       const params: Record<string, unknown> = {
         page,
         size: pageSize,
@@ -106,7 +105,14 @@ const UsersScreen: React.FC = () => {
 
       return { rows: parsedRows, total: totalElements };
     },
-  });
+    [],
+  );
+
+  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } =
+    useServerGrid<UserRow, UsersFilter | undefined>({
+      initialPageSize: 10,
+      fetchPage: fetchUsersPage,
+    });
 
   const openModal = useCallback((user?: AdminUser) => {
     if (user) {
@@ -345,10 +351,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    minWidth: 0,
+    minHeight: 0,
   },
   gridContainer: {
     flex: 1,
     width: '100%',
+    minWidth: 0,
+    minHeight: 0,
+    alignSelf: 'stretch',
   },
   filterRow: {
     flexDirection: 'row',

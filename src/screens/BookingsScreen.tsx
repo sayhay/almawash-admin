@@ -5,7 +5,7 @@ import { Button, Dialog, Portal, TextInput } from 'react-native-paper';
 
 import client from '@/api/client';
 import { ApiError } from '@/api/errors';
-import { useServerGrid } from '@/hooks/useServerGrid';
+import { useServerGrid, type UseServerGridParams } from '@/hooks/useServerGrid';
 import { DataGridX, GridColumn, ServerToolbar } from '@/ui/table';
 import { formatCurrencyEUR, formatDate } from '@/utils/format';
 import { BOOKING_STATUSES } from '@/utils/constants';
@@ -89,9 +89,8 @@ const BookingsScreen: React.FC = () => {
   const [dateFromInput, setDateFromInput] = useState('');
   const [dateToInput, setDateToInput] = useState('');
 
-  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } = useServerGrid<BookingRow, BookingsFilter | undefined>({
-    initialPageSize: 10,
-    fetchPage: async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
+  const fetchBookingsPage = useCallback<UseServerGridParams<BookingsFilter | undefined>['fetchPage']>(
+    async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
       const params: Record<string, unknown> = {
         page,
         size: pageSize,
@@ -109,7 +108,14 @@ const BookingsScreen: React.FC = () => {
       const totalElements = extractTotal(response, parsedRows.length);
       return { rows: parsedRows, total: totalElements };
     },
-  });
+    [],
+  );
+
+  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } =
+    useServerGrid<BookingRow, BookingsFilter | undefined>({
+      initialPageSize: 10,
+      fetchPage: fetchBookingsPage,
+    });
 
   const { mutate: updateBooking, loading: updating } = useMutation<BookingItem, Partial<BookingItem>>('put');
   const { mutate: removeBooking } = useMutation<void>('delete');
@@ -338,10 +344,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    minWidth: 0,
+    minHeight: 0,
   },
   gridContainer: {
     flex: 1,
     width: '100%',
+    minWidth: 0,
+    minHeight: 0,
+    alignSelf: 'stretch',
   },
   rowActions: {
     flexDirection: 'row',
