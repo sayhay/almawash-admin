@@ -1,16 +1,23 @@
 import * as React from 'react';
 import type {
   GridColDef,
-  GridPaginationModel,
+  GridPaginationModel as MuiPaginationModel,
   GridRowParams,
-  GridSortModel,
+  GridSortModel as MuiSortModel,
 } from '@mui/x-data-grid';
 
-import type { DataGridXProps, GridColumn, ServerPager } from './types';
-export type { GridColumn, ServerPager } from './types';
+import type {
+  DataGridXProps,
+  GridColumn,
+  GridPaginationModel,
+  GridSortModel,
+} from './types';
+export type { GridColumn } from './types';
 
-const { DataGrid } = require('@mui/x-data-grid');
+const dataGridModule = require('@mui/x-data-grid') as typeof import('@mui/x-data-grid');
 const { Box } = require('@mui/material');
+
+const { DataGrid, useGridApiRef } = dataGridModule;
 
 type WebDataGridProps<T extends { id: number | string }> = DataGridXProps<T>;
 
@@ -44,14 +51,16 @@ export const WebDataGrid = <T extends { id: number | string }>({
   rowCount,
   loading = false,
   serverMode = false,
-  pagination,
-  onPaginationChange,
+  paginationModel,
+  onPaginationModelChange,
+  sortModel,
+  onSortModelChange,
   onRowClick,
   getRowId = (row: T) => row.id,
   toolbar,
   emptyText = 'Aucune donnée',
 }: WebDataGridProps<T>) => {
-  const pageSize = pagination?.pageSize ?? 10;
+  const apiRef = typeof useGridApiRef === 'function' ? useGridApiRef() : undefined;
 
   const gridColumns = React.useMemo<GridColDef[]>(
     () =>
@@ -73,49 +82,35 @@ export const WebDataGrid = <T extends { id: number | string }>({
     [columns],
   );
 
-  const paginationModel = React.useMemo<ServerPager | undefined>(() => {
-    if (!pagination) {
-      return undefined;
-    }
-    return {
-      page: pagination.page ?? 0,
-      pageSize: pagination.pageSize ?? pageSize,
-      sortField: pagination.sortField,
-      sortDirection: pagination.sortDirection,
-      search: pagination.search,
-    };
-  }, [pageSize, pagination]);
+  const gridSortModel = React.useMemo<MuiSortModel>(
+    () =>
+      (sortModel ?? []).map((item) => ({
+        field: item.field,
+        sort: item.sort,
+      })),
+    [sortModel],
+  );
 
   const handlePaginationModelChange = React.useCallback(
-    (model: GridPaginationModel) => {
-      if (!pagination || !onPaginationChange) {
-        return;
-      }
-
-      onPaginationChange({
-        ...pagination,
-        page: model.page,
-        pageSize: model.pageSize,
-      });
+    (model: MuiPaginationModel) => {
+      onPaginationModelChange?.({ page: model.page, pageSize: model.pageSize });
     },
-    [onPaginationChange, pagination],
+    [onPaginationModelChange],
   );
 
   const handleSortModelChange = React.useCallback(
-    (model: GridSortModel) => {
-      if (!onPaginationChange || !pagination) {
+    (model: MuiSortModel) => {
+      if (!onSortModelChange) {
         return;
       }
 
-      const next = model[0];
-      onPaginationChange({
-        ...pagination,
-        page: 0,
-        sortField: next?.field,
-        sortDirection: (next?.sort as 'asc' | 'desc' | undefined) ?? undefined,
-      });
+      const cleaned: GridSortModel = model
+        .filter((item) => item.sort === 'asc' || item.sort === 'desc')
+        .map((item) => ({ field: item.field, sort: item.sort as 'asc' | 'desc' }));
+
+      onSortModelChange(cleaned);
     },
-    [onPaginationChange, pagination],
+    [onSortModelChange],
   );
 
   const ToolbarSlot = React.useMemo(() => {
@@ -142,56 +137,58 @@ export const WebDataGrid = <T extends { id: number | string }>({
 
   const isServer = serverMode === true;
 
+  React.useEffect(() => {
+    if (!apiRef?.current) {
+      return;
+    }
+
+    apiRef.current.resize();
+  }, [apiRef, gridColumns, rows, paginationModel?.page, paginationModel?.pageSize, isServer]);
+
   return (
-    <Box
-      sx={{
-        width: '100%',
-        height: '100%',
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        minHeight: 0,
-      }}
-    >
-      <DataGrid
-        autoHeight={!isServer}
-        rows={rows}
-        columns={gridColumns}
-        loading={loading}
-        paginationMode={isServer ? 'server' : 'client'}
-        sortingMode={isServer ? 'server' : 'client'}
-        rowCount={effectiveRowCount}
-        paginationModel={paginationModel ? { page: paginationModel.page, pageSize: paginationModel.pageSize } : undefined}
-        onPaginationModelChange={paginationModel ? handlePaginationModelChange : undefined}
-        onSortModelChange={isServer ? handleSortModelChange : undefined}
-        disableRowSelectionOnClick
-        getRowId={getRowId}
-        onRowClick={onRowClick ? (params: GridRowParams<T>) => onRowClick(params.row as T) : undefined}
-        slots={{
-          toolbar: ToolbarSlot,
-          noRowsOverlay: NoRowsOverlay,
-        }}
-        localeText={frLocaleText}
-        pageSizeOptions={[5, 10, 20, 50]}
-        sx={{
-          flex: 1,
-          border: 0,
-          '--DataGrid-containerBackground': 'transparent',
-          '& .MuiDataGrid-main': {
-            flexGrow: 1,
-            minHeight: 0,
-          },
-          '& .MuiDataGrid-columnHeaders': {
-            lineHeight: '1.2',
-            fontSize: 13,
-          },
-          '& .MuiDataGrid-cell': {
-            lineHeight: '1.2',
-            fontSize: 13,
-          },
-        }}
-      />
+    <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+      <Box sx={{ width: '100%', height: '100%', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+        <DataGrid
+          apiRef={apiRef}
+          autoHeight={!isServer}
+          rows={rows}
+          columns={gridColumns}
+          loading={loading}
+          paginationMode={isServer ? 'server' : 'client'}
+          sortingMode={isServer ? 'server' : 'client'}
+          rowCount={effectiveRowCount}
+          paginationModel={paginationModel}
+          onPaginationModelChange={paginationModel && onPaginationModelChange ? handlePaginationModelChange : undefined}
+          sortModel={gridSortModel}
+          onSortModelChange={isServer ? handleSortModelChange : undefined}
+          disableRowSelectionOnClick
+          getRowId={getRowId}
+          onRowClick={onRowClick ? (params: GridRowParams<T>) => onRowClick(params.row as T) : undefined}
+          slots={{
+            toolbar: ToolbarSlot,
+            noRowsOverlay: NoRowsOverlay,
+          }}
+          localeText={frLocaleText}
+          pageSizeOptions={[5, 10, 20, 50]}
+          sx={{
+            flex: 1,
+            border: 0,
+            '--DataGrid-containerBackground': 'transparent',
+            '& .MuiDataGrid-main': {
+              flexGrow: 1,
+              minHeight: 0,
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              lineHeight: '1.2',
+              fontSize: 13,
+            },
+            '& .MuiDataGrid-cell': {
+              lineHeight: '1.2',
+              fontSize: 13,
+            },
+          }}
+        />
+      </Box>
     </Box>
   );
 };

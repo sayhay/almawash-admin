@@ -1,13 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import type { AxiosResponse } from 'axios';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native-paper';
 
 import client from '@/api/client';
 import { ApiError } from '@/api/errors';
 import { useApi } from '@/hooks/useApi';
-import { useServerGrid, type UseServerGridParams } from '@/hooks/useServerGrid';
-import { DataGridX, GridColumn, ServerToolbar } from '@/ui/table';
+import { useServerGrid } from '@/hooks/useServerGrid';
+import { DataGridX, GridColumn } from '@/ui/table';
+import { ServerToolbar } from '@/ui/table/ServerToolbar';
 import { formatDate, formatPhone } from '@/utils/format';
 import { USER_ROLES, USER_STATUSES } from '@/utils/constants';
 import type { AdminUser, AdminUserRequest } from '@/utils/types';
@@ -19,59 +19,7 @@ type UsersFilter = {
   status?: string;
 };
 
-type UsersResponse =
-  | AdminUser[]
-  | {
-      items?: AdminUser[];
-      content?: AdminUser[];
-      data?: AdminUser[];
-      total?: number;
-      totalElements?: number;
-    };
-
 type UserRow = AdminUser;
-
-const parseUsers = (payload: UsersResponse): AdminUser[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  if (Array.isArray(payload.items)) {
-    return payload.items;
-  }
-
-  if (Array.isArray(payload.content)) {
-    return payload.content;
-  }
-
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
-
-  return [];
-};
-
-const extractTotal = (response: AxiosResponse<UsersResponse>, fallbackLength: number): number => {
-  const headerTotal = response.headers?.['x-total-count'] as string | undefined;
-  if (typeof headerTotal === 'string') {
-    const parsed = Number(headerTotal);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  const data = response.data;
-  if (data && !Array.isArray(data)) {
-    if (typeof data.total === 'number') {
-      return data.total;
-    }
-    if (typeof data.totalElements === 'number') {
-      return data.totalElements;
-    }
-  }
-
-  return fallbackLength;
-};
 
 const UsersScreen: React.FC = () => {
   const [visible, setVisible] = useState(false);
@@ -86,33 +34,34 @@ const UsersScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const { run } = useApi();
-
-  const fetchUsersPage = useCallback<UseServerGridParams<UsersFilter | undefined>['fetchPage']>(
-    async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
-      const params: Record<string, unknown> = {
+  const {
+    rows,
+    rowCount,
+    loading,
+    paginationModel,
+    sortModel,
+    search,
+    filter,
+    setPaginationModel,
+    setSortModel,
+    setSearch,
+    setFilter,
+    refresh,
+  } = useServerGrid<UserRow, UsersFilter>({
+    endpoint: '/api/admin/users',
+    initialPageSize: 10,
+    mapParams: ({ page, pageSize, sortModel: currentSort, search: searchQuery, filter: currentFilter }) => {
+      const [sort] = currentSort;
+      return {
         page,
         size: pageSize,
-        sort: sortField ? `${sortField},${sortDirection ?? 'asc'}` : undefined,
+        sort: sort ? `${sort.field},${sort.sort}` : undefined,
         role: currentFilter?.role,
         status: currentFilter?.status,
-        email: search,
+        email: searchQuery,
       };
-
-      const response = await client.get<UsersResponse>('/api/admin/users', { params });
-      const data = response.data;
-      const parsedRows = parseUsers(data ?? []);
-      const totalElements = extractTotal(response, parsedRows.length);
-
-      return { rows: parsedRows, total: totalElements };
     },
-    [],
-  );
-
-  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } =
-    useServerGrid<UserRow, UsersFilter | undefined>({
-      initialPageSize: 10,
-      fetchPage: fetchUsersPage,
-    });
+  });
 
   const openModal = useCallback((user?: AdminUser) => {
     if (user) {
@@ -257,20 +206,24 @@ const UsersScreen: React.FC = () => {
           rows={rows}
           columns={columns}
           loading={loading}
-          rowCount={total}
+          rowCount={rowCount}
           serverMode
-          pagination={pagination}
-          onPaginationChange={setPagination}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          sortModel={sortModel}
+          onSortModelChange={setSortModel}
           emptyText="Aucun utilisateur"
           toolbar={
             <ServerToolbar
               searchPlaceholder="Rechercher un email"
-              searchValue={pagination.search ?? ''}
+              searchValue={search}
               onSearch={(query) => setSearch(query || undefined)}
               filters={toolbarFilters}
               onReset={() => {
                 setFilter(() => undefined);
-                setPagination((prev) => ({ ...prev, page: 0, search: undefined, sortField: undefined, sortDirection: undefined }));
+                setSearch(undefined);
+                setSortModel([]);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
               }}
               actions={
                 Platform.OS === 'web' ? (

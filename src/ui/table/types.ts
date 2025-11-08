@@ -12,13 +12,17 @@ export type GridColumn<T> = {
   align?: 'left' | 'right' | 'center';
 };
 
-export type ServerPager = {
+export type GridPaginationModel = {
   page: number;
   pageSize: number;
-  sortField?: string;
-  sortDirection?: 'asc' | 'desc';
-  search?: string;
 };
+
+export type GridSortItem = {
+  field: string;
+  sort: 'asc' | 'desc';
+};
+
+export type GridSortModel = GridSortItem[];
 
 export type DataGridXProps<T extends { id: number | string }> = {
   rows: T[];
@@ -26,8 +30,10 @@ export type DataGridXProps<T extends { id: number | string }> = {
   rowCount?: number;
   loading?: boolean;
   serverMode?: boolean;
-  pagination?: ServerPager;
-  onPaginationChange?: (pager: ServerPager) => void;
+  paginationModel?: GridPaginationModel;
+  onPaginationModelChange?: (model: GridPaginationModel) => void;
+  sortModel?: GridSortModel;
+  onSortModelChange?: (model: GridSortModel) => void;
   onRowClick?: (row: T) => void;
   getRowId?: (row: T) => string | number;
   toolbar?: React.ReactNode;

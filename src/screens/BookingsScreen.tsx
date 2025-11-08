@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AxiosResponse } from 'axios';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Portal, TextInput } from 'react-native-paper';
 
-import client from '@/api/client';
 import { ApiError } from '@/api/errors';
-import { useServerGrid, type UseServerGridParams } from '@/hooks/useServerGrid';
-import { DataGridX, GridColumn, ServerToolbar } from '@/ui/table';
+import { useServerGrid } from '@/hooks/useServerGrid';
+import { DataGridX, GridColumn } from '@/ui/table';
+import { ServerToolbar } from '@/ui/table/ServerToolbar';
 import { formatCurrencyEUR, formatDate } from '@/utils/format';
 import { BOOKING_STATUSES } from '@/utils/constants';
 import type { BookingItem } from '@/utils/types';
@@ -30,55 +29,7 @@ type BookingsFilter = {
   dateTo?: string;
 };
 
-type BookingsResponse =
-  | BookingItem[]
-  | {
-      items?: BookingItem[];
-      content?: BookingItem[];
-      data?: BookingItem[];
-      total?: number;
-      totalElements?: number;
-    };
-
 type BookingRow = BookingItem;
-
-const parseBookings = (payload: BookingsResponse): BookingRow[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  if (Array.isArray(payload.items)) {
-    return payload.items;
-  }
-  if (Array.isArray(payload.content)) {
-    return payload.content;
-  }
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
-  return [];
-};
-
-const extractTotal = (response: AxiosResponse<BookingsResponse>, fallbackLength: number): number => {
-  const headerTotal = response.headers?.['x-total-count'] as string | undefined;
-  if (typeof headerTotal === 'string') {
-    const parsed = Number(headerTotal);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  const data = response.data;
-  if (data && !Array.isArray(data)) {
-    if (typeof data.total === 'number') {
-      return data.total;
-    }
-    if (typeof data.totalElements === 'number') {
-      return data.totalElements;
-    }
-  }
-
-  return fallbackLength;
-};
 
 const BookingsScreen: React.FC = () => {
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -89,33 +40,37 @@ const BookingsScreen: React.FC = () => {
   const [dateFromInput, setDateFromInput] = useState('');
   const [dateToInput, setDateToInput] = useState('');
 
-  const fetchBookingsPage = useCallback<UseServerGridParams<BookingsFilter | undefined>['fetchPage']>(
-    async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
-      const params: Record<string, unknown> = {
+  const {
+    rows,
+    rowCount,
+    loading,
+    paginationModel,
+    sortModel,
+    search,
+    filter,
+    setPaginationModel,
+    setSortModel,
+    setSearch,
+    setFilter,
+    refresh,
+  } = useServerGrid<BookingRow, BookingsFilter>({
+    endpoint: '/api/admin/bookings',
+    initialPageSize: 10,
+    mapParams: ({ page, pageSize, sortModel: currentSort, search: searchQuery, filter: currentFilter }) => {
+      const [sort] = currentSort;
+      return {
         page,
         size: pageSize,
-        sort: sortField ? `${sortField},${sortDirection ?? 'asc'}` : undefined,
+        sort: sort ? `${sort.field},${sort.sort}` : undefined,
         status: currentFilter?.status,
         providerId: currentFilter?.providerId,
         clientId: currentFilter?.clientId,
         dateFrom: currentFilter?.dateFrom,
         dateTo: currentFilter?.dateTo,
-        search,
+        search: searchQuery,
       };
-
-      const response = await client.get<BookingsResponse>('/api/admin/bookings', { params });
-      const parsedRows = parseBookings(response.data ?? []);
-      const totalElements = extractTotal(response, parsedRows.length);
-      return { rows: parsedRows, total: totalElements };
     },
-    [],
-  );
-
-  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } =
-    useServerGrid<BookingRow, BookingsFilter | undefined>({
-      initialPageSize: 10,
-      fetchPage: fetchBookingsPage,
-    });
+  });
 
   const { mutate: updateBooking, loading: updating } = useMutation<BookingItem, Partial<BookingItem>>('put');
   const { mutate: removeBooking } = useMutation<void>('delete');
@@ -238,15 +193,17 @@ const BookingsScreen: React.FC = () => {
           rows={rows}
           columns={columns}
           loading={loading}
-          rowCount={total}
+          rowCount={rowCount}
           serverMode
-          pagination={pagination}
-          onPaginationChange={setPagination}
+          paginationModel={paginationModel}
+          onPaginationModelChange={setPaginationModel}
+          sortModel={sortModel}
+          onSortModelChange={setSortModel}
           emptyText="Aucune réservation"
           toolbar={
             <ServerToolbar
               searchPlaceholder="Rechercher (email, service...)"
-              searchValue={pagination.search ?? ''}
+              searchValue={search}
               onSearch={(query) => setSearch(query || undefined)}
               filters={[
                 {
@@ -264,7 +221,9 @@ const BookingsScreen: React.FC = () => {
               ]}
               onReset={() => {
                 setFilter(() => undefined);
-                setPagination((prev) => ({ ...prev, page: 0, search: undefined, sortField: undefined, sortDirection: undefined }));
+                setSearch(undefined);
+                setSortModel([]);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
                 setProviderIdInput('');
                 setClientIdInput('');
                 setDateFromInput('');

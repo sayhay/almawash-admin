@@ -5,6 +5,7 @@ import { Button, Card, Text } from 'react-native-paper';
 import { ChartView } from '@/components/ChartView';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { Loader } from '@/components/Loader';
+import { useServerGrid } from '@/hooks/useServerGrid';
 import { DataGridX, GridColumn } from '@/ui/table';
 import { useFetch } from '@/hooks/useFetch';
 import { formatCurrencyEUR } from '@/utils/format';
@@ -27,6 +28,48 @@ const StatsScreen: React.FC = () => {
       .map(([month, value]) => ({ month, value }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [revenueData, stats]);
+
+  const {
+    rows: revenueRowsServer,
+    rowCount: revenueRowCount,
+    loading: revenueLoading,
+    paginationModel: revenuePaginationModel,
+    sortModel: revenueSortModel,
+    setPaginationModel: setRevenuePaginationModel,
+    setSortModel: setRevenueSortModel,
+  } = useServerGrid<RevenuePoint & { id: string }>({
+    endpoint: '/api/admin/stats/revenue',
+    initialPageSize: 12,
+    mapRow: (item) => {
+      if (item && typeof item === 'object') {
+        const record = item as Record<string, unknown>;
+        const month = typeof record.month === 'string' ? record.month : String(record.month ?? record.key ?? '');
+        const rawValue = record.value ?? record.amount ?? record.total;
+        const value = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0);
+        const identifier = (record.id ?? month ?? `${month}-${value}`) as string;
+        return {
+          month,
+          value: Number.isFinite(value) ? value : 0,
+          id: identifier || `${month}-${value}`,
+        };
+      }
+      return {
+        month: String(item ?? ''),
+        value: 0,
+        id: String(item ?? ''),
+      };
+    },
+  });
+
+  const revenueRows = useMemo(() => {
+    if (revenueRowsServer.length > 0) {
+      return revenueRowsServer;
+    }
+    return revenuePoints.map((point) => ({ ...point, id: point.month }));
+  }, [revenuePoints, revenueRowsServer]);
+
+  const revenueRowCountValue = revenueRowsServer.length > 0 ? revenueRowCount : revenueRows.length;
+  const revenueServerMode = revenueRowsServer.length > 0;
 
   const revenueColumns = useMemo<GridColumn<RevenuePoint & { id: string }>[]>(
     () => [
@@ -103,8 +146,15 @@ const StatsScreen: React.FC = () => {
         <Card.Title title="Répartition des revenus" subtitle="Montants mensuels" />
         <Card.Content style={styles.tableContent}>
           <DataGridX<RevenuePoint & { id: string }>
-            rows={revenuePoints.map((point) => ({ ...point, id: point.month }))}
+            rows={revenueRows}
             columns={revenueColumns}
+            loading={revenueServerMode ? revenueLoading : revenueLoading && revenueRows.length === 0}
+            serverMode={revenueServerMode}
+            rowCount={revenueRowCountValue}
+            paginationModel={revenueServerMode ? revenuePaginationModel : undefined}
+            onPaginationModelChange={revenueServerMode ? setRevenuePaginationModel : undefined}
+            sortModel={revenueServerMode ? revenueSortModel : undefined}
+            onSortModelChange={revenueServerMode ? setRevenueSortModel : undefined}
             emptyText="Aucune donnée de revenus"
           />
         </Card.Content>
