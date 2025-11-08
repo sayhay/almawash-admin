@@ -127,12 +127,12 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
   const [sortModel, setSortModelState] = React.useState<GridSortModel>(() => normalizeSortModel(initialSortModel));
   const [searchValue, setSearchValue] = React.useState(initialSearch ?? '');
   const [filter, setFilterState] = React.useState<TFilter | undefined>(initialFilter);
-  const [filterVersion, setFilterVersion] = React.useState(0);
 
   const abortControllerRef = React.useRef<AbortController | null>(null);
   const mountedRef = React.useRef(true);
   const searchRef = React.useRef(initialSearch ?? '');
   const filterRef = React.useRef<TFilter | undefined>(initialFilter);
+  const sortModelRef = React.useRef<GridSortModel>(normalizeSortModel(initialSortModel));
   const rowMapperRef = React.useRef<(item: unknown) => T>(mapRow ?? ((item) => item as T));
 
   React.useEffect(() => {
@@ -154,10 +154,33 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
     rowMapperRef.current = mapRow ?? ((item) => item as T);
   }, [mapRow]);
 
+  React.useEffect(() => {
+    sortModelRef.current = sortModel;
+  }, [sortModel]);
+
   const paramsMapper = React.useMemo(() => mapParams ?? defaultParamsMapper<TFilter>, [mapParams]);
 
   const normalizedSearch = searchValue.trim();
   const debouncedSearch = useDebouncedValue(normalizedSearch, DEFAULT_DEBOUNCE);
+
+  const sortKey = React.useMemo(
+    () =>
+      sortModel
+        .map((item) => `${item.field}:${item.sort}`)
+        .join('|'),
+    [sortModel],
+  );
+
+  const filtersKey = React.useMemo(() => {
+    if (filter === undefined) {
+      return '';
+    }
+    try {
+      return JSON.stringify(filter);
+    } catch {
+      return String(filter);
+    }
+  }, [filter]);
 
   const setPaginationModel = React.useCallback(
     (updater: React.SetStateAction<GridPaginationModel>) => {
@@ -199,19 +222,34 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
 
   const setFilter = React.useCallback(
     (updater: React.SetStateAction<TFilter | undefined>) => {
+      let changed = false;
       setFilterState((prev) => {
         const nextValue =
           typeof updater === 'function'
             ? (updater as (value: TFilter | undefined) => TFilter | undefined)(prev)
             : updater;
 
-        if (!Object.is(prev, nextValue)) {
-          setFilterVersion((version) => version + 1);
+        if (Object.is(prev, nextValue)) {
+          return prev;
         }
 
+        if (prev && nextValue && typeof prev === 'object' && typeof nextValue === 'object') {
+          try {
+            if (JSON.stringify(prev) === JSON.stringify(nextValue)) {
+              return prev;
+            }
+          } catch {
+            // ignore serialization errors and treat as changed
+          }
+        }
+
+        changed = true;
         return nextValue;
       });
-      setPaginationModelState((prev) => (prev.page === 0 ? prev : { ...prev, page: 0 }));
+
+      if (changed) {
+        setPaginationModelState((prev) => (prev.page === 0 ? prev : { ...prev, page: 0 }));
+      }
     },
     [],
   );
@@ -226,7 +264,7 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
     const queryParams = paramsMapper({
       page: paginationModel.page,
       pageSize: paginationModel.pageSize,
-      sortModel,
+      sortModel: sortModelRef.current,
       search: debouncedSearch.length > 0 ? debouncedSearch : undefined,
       filter: filterRef.current,
     });
@@ -263,18 +301,6 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
           content = payload.data;
         }
 
-        const serverPage = typeof payload.number === 'number' ? payload.number : undefined;
-        const serverSize = typeof payload.size === 'number' ? payload.size : undefined;
-
-        setPaginationModelState((prev) => {
-          const nextPage = serverPage ?? prev.page;
-          const nextSize = serverSize ?? prev.pageSize;
-          if (prev.page === nextPage && prev.pageSize === nextSize) {
-            return prev;
-          }
-          return { page: nextPage, pageSize: nextSize };
-        });
-
         if (typeof payload.totalElements === 'number') {
           totalFromHeaders = payload.totalElements;
         } else if (typeof payload.total === 'number') {
@@ -303,7 +329,7 @@ export function useServerGrid<T, TFilter = Record<string, unknown>>({
         setLoading(false);
       }
     }
-  }, [debouncedSearch, endpoint, paginationModel.page, paginationModel.pageSize, paramsMapper, sortModel, filterVersion]);
+  }, [debouncedSearch, endpoint, filtersKey, paginationModel.page, paginationModel.pageSize, paramsMapper, sortKey]);
 
   React.useEffect(() => {
     if (!mountedRef.current) {

@@ -23,10 +23,9 @@ const statusLabels: Record<string, string> = {
 
 type BookingsFilter = {
   status?: string;
-  providerId?: string;
-  clientId?: string;
-  dateFrom?: string;
-  dateTo?: string;
+  providerId?: number;
+  clientId?: number;
+  date?: string;
 };
 
 type BookingRow = BookingItem;
@@ -37,8 +36,7 @@ const BookingsScreen: React.FC = () => {
   const [errors, setErrors] = useState<string | undefined>();
   const [providerIdInput, setProviderIdInput] = useState('');
   const [clientIdInput, setClientIdInput] = useState('');
-  const [dateFromInput, setDateFromInput] = useState('');
-  const [dateToInput, setDateToInput] = useState('');
+  const [dateInput, setDateInput] = useState('');
 
   const {
     rows,
@@ -58,16 +56,22 @@ const BookingsScreen: React.FC = () => {
     initialPageSize: 10,
     mapParams: ({ page, pageSize, sortModel: currentSort, search: searchQuery, filter: currentFilter }) => {
       const [sort] = currentSort;
+      const providerId = typeof currentFilter?.providerId === 'number' && Number.isFinite(currentFilter.providerId)
+        ? currentFilter.providerId
+        : undefined;
+      const clientId = typeof currentFilter?.clientId === 'number' && Number.isFinite(currentFilter.clientId)
+        ? currentFilter.clientId
+        : undefined;
+      const date = currentFilter?.date && currentFilter.date.length > 0 ? currentFilter.date : undefined;
       return {
         page,
         size: pageSize,
-        sort: sort ? `${sort.field},${sort.sort}` : undefined,
-        status: currentFilter?.status,
-        providerId: currentFilter?.providerId,
-        clientId: currentFilter?.clientId,
-        dateFrom: currentFilter?.dateFrom,
-        dateTo: currentFilter?.dateTo,
-        search: searchQuery,
+        ...(sort ? { sort: `${sort.field},${sort.sort}` } : {}),
+        ...(currentFilter?.status ? { status: currentFilter.status } : {}),
+        ...(providerId !== undefined ? { providerId } : {}),
+        ...(clientId !== undefined ? { clientId } : {}),
+        ...(date ? { date } : {}),
+        ...(searchQuery ? { search: searchQuery } : {}),
       };
     },
   });
@@ -76,11 +80,10 @@ const BookingsScreen: React.FC = () => {
   const { mutate: removeBooking } = useMutation<void>('delete');
 
   useEffect(() => {
-    setProviderIdInput(filter?.providerId ?? '');
-    setClientIdInput(filter?.clientId ?? '');
-    setDateFromInput(filter?.dateFrom ?? '');
-    setDateToInput(filter?.dateTo ?? '');
-  }, [filter?.clientId, filter?.dateFrom, filter?.dateTo, filter?.providerId]);
+    setProviderIdInput(filter?.providerId !== undefined ? String(filter.providerId) : '');
+    setClientIdInput(filter?.clientId !== undefined ? String(filter.clientId) : '');
+    setDateInput(filter?.date ?? '');
+  }, [filter?.clientId, filter?.date, filter?.providerId]);
 
   const openStatusDialog = useCallback((booking: BookingItem) => {
     setSelected(booking);
@@ -128,12 +131,25 @@ const BookingsScreen: React.FC = () => {
   const applyAdvancedFilters = useCallback(() => {
     setFilter((prev) => ({
       ...(prev ?? {}),
-      providerId: providerIdInput.trim() || undefined,
-      clientId: clientIdInput.trim() || undefined,
-      dateFrom: dateFromInput.trim() || undefined,
-      dateTo: dateToInput.trim() || undefined,
+      providerId: (() => {
+        const value = providerIdInput.trim();
+        if (!value) {
+          return undefined;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      })(),
+      clientId: (() => {
+        const value = clientIdInput.trim();
+        if (!value) {
+          return undefined;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      })(),
+      date: dateInput.trim() || undefined,
     }));
-  }, [clientIdInput, dateFromInput, dateToInput, providerIdInput, setFilter]);
+  }, [clientIdInput, dateInput, providerIdInput, setFilter]);
 
   const columns = useMemo<GridColumn<BookingRow>[]>(
     () => [
@@ -226,8 +242,7 @@ const BookingsScreen: React.FC = () => {
                 setPaginationModel((prev) => ({ ...prev, page: 0 }));
                 setProviderIdInput('');
                 setClientIdInput('');
-                setDateFromInput('');
-                setDateToInput('');
+                setDateInput('');
               }}
               actions={
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbarActions}>
@@ -247,18 +262,10 @@ const BookingsScreen: React.FC = () => {
                   />
                   <TextInput
                     mode="outlined"
-                    label="Date début"
+                    label="Date"
                     placeholder="YYYY-MM-DD"
-                    value={dateFromInput}
-                    onChangeText={setDateFromInput}
-                    style={styles.filterInput}
-                  />
-                  <TextInput
-                    mode="outlined"
-                    label="Date fin"
-                    placeholder="YYYY-MM-DD"
-                    value={dateToInput}
-                    onChangeText={setDateToInput}
+                    value={dateInput}
+                    onChangeText={setDateInput}
                     style={styles.filterInput}
                   />
                   <Button mode="contained-tonal" onPress={applyAdvancedFilters}>
