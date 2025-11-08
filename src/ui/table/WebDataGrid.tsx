@@ -137,14 +137,6 @@ export const WebDataGrid = <T extends { id: number | string }>({
 
   const isServer = serverMode === true;
 
-  React.useEffect(() => {
-    if (!apiRef?.current) {
-      return;
-    }
-
-    apiRef.current.resize();
-  }, [apiRef, gridColumns, rows, paginationModel?.page, paginationModel?.pageSize, isServer]);
-
   return (
     <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
       <Box sx={{ width: '100%', height: '100%', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
