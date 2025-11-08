@@ -554,10 +554,7 @@
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AdminUserResponse"
-                                    }
+                                    "$ref": "#/components/schemas/PageResponseAdminUserResponse"
                                 }
                             }
                         }
@@ -805,10 +802,7 @@
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/AdminBookingResponse"
-                                    }
+                                    "$ref": "#/components/schemas/PageResponseAdminBookingResponse"
                                 }
                             }
                         }
@@ -820,6 +814,11 @@
     "components": {
         "schemas": {
             "AdminUserRequest": {
+                "required": [
+                    "email",
+                    "phone",
+                    "role"
+                ],
                 "type": "object",
                 "properties": {
                     "email": {
@@ -1109,6 +1108,39 @@
                     }
                 }
             },
+            "PageResponseAdminUserResponse": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AdminUserResponse"
+                        }
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "size": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "AdminStatsResponse": {
                 "type": "object",
                 "properties": {
@@ -1151,6 +1183,39 @@
                     "completed": {
                         "type": "integer",
                         "format": "int64"
+                    }
+                }
+            },
+            "PageResponseAdminBookingResponse": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AdminBookingResponse"
+                        }
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "size": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
                     }
                 }
             }
