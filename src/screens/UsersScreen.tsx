@@ -55,10 +55,10 @@ const UsersScreen: React.FC = () => {
       return {
         page,
         size: pageSize,
-        sort: sort ? `${sort.field},${sort.sort}` : undefined,
-        role: currentFilter?.role,
-        status: currentFilter?.status,
-        email: searchQuery,
+        ...(sort ? { sort: `${sort.field},${sort.sort}` } : {}),
+        ...(currentFilter?.role ? { role: currentFilter.role } : {}),
+        ...(currentFilter?.status ? { status: currentFilter.status } : {}),
+        ...(searchQuery ? { email: searchQuery } : {}),
       };
     },
   });
