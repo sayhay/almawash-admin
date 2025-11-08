@@ -1,6 +1,10 @@
 import React, { useMemo } from 'react';
 import { Dimensions, Platform, StyleSheet, View } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { useTheme } from '@shopify/restyle';
+
+import type { AppTheme } from '@/theme';
+import { Text } from '@/theme';
+import { Surface } from '@/ui/Surface';
 import type { RevenuePoint } from '../utils/types';
 
 // Charge la bonne lib Victory selon la plateforme (web: 'victory', natif: 'victory-native')
@@ -17,6 +21,7 @@ interface ChartViewProps {
 }
 
 export const ChartView: React.FC<ChartViewProps> = ({ title, data }) => {
+  const theme = useTheme<AppTheme>();
   const chartWidth = Math.max(Dimensions.get('window').width - 64, 320);
 
   // ⚙️ Mémoïse l’accès aux composants (évite re-resolve à chaque render)
@@ -38,41 +43,36 @@ export const ChartView: React.FC<ChartViewProps> = ({ title, data }) => {
   };
 
   return (
-    <Card style={styles.card}>
-      <Card.Content>
-        <Text variant="titleMedium" style={styles.title}>
-          {title}
-        </Text>
-        <View style={{ width: chartWidth }}>
-          <VictoryChart theme={theme} width={chartWidth} height={240} domainPadding={{ x: 20 }}>
-            <VictoryAxis
-              tickFormat={formatMonth}
-              style={{ tickLabels: { fontSize: 10 } }}
-            />
-            <VictoryAxis
-              dependentAxis
-              tickFormat={formatK}
-              style={{ tickLabels: { fontSize: 10 } }}
-            />
-            <VictoryLine
-              data={data}
-              x="month"
-              y="value"
-              interpolation="natural"
-              // petit lissage visuel
-              style={{ data: { strokeWidth: 2 } }}
-            />
-          </VictoryChart>
-        </View>
-      </Card.Content>
-    </Card>
+    <Surface marginBottom="xl">
+      <Text variant="title" style={styles.title}>
+        {title}
+      </Text>
+      <View style={{ width: chartWidth }}>
+        <VictoryChart theme={theme} width={chartWidth} height={240} domainPadding={{ x: 20 }}>
+          <VictoryAxis
+            tickFormat={formatMonth}
+            style={{ tickLabels: { fontSize: 10, fill: theme.colors.muted } }}
+          />
+          <VictoryAxis
+            dependentAxis
+            tickFormat={formatK}
+            style={{ tickLabels: { fontSize: 10, fill: theme.colors.muted } }}
+          />
+          <VictoryLine
+            data={data}
+            x="month"
+            y="value"
+            interpolation="natural"
+            // petit lissage visuel
+            style={{ data: { strokeWidth: 2, stroke: theme.colors.primary } }}
+          />
+        </VictoryChart>
+      </View>
+    </Surface>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    marginVertical: 16,
-  },
   title: {
     marginBottom: 12,
   },

@@ -16,6 +16,7 @@ export type { GridColumn } from './types';
 
 const dataGridModule = require('@mui/x-data-grid') as typeof import('@mui/x-data-grid');
 const { Box } = require('@mui/material');
+const { useTheme: useMuiTheme } = require('@mui/material/styles');
 
 const { DataGrid, useGridApiRef } = dataGridModule;
 
@@ -137,6 +138,8 @@ export const WebDataGrid = <T extends { id: number | string }>({
 
   const isServer = serverMode === true;
 
+  const muiTheme = typeof useMuiTheme === 'function' ? useMuiTheme() : undefined;
+
   return (
     <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
       <Box sx={{ width: '100%', height: '100%', minHeight: 420, display: 'flex', flexDirection: 'column' }}>
@@ -165,18 +168,24 @@ export const WebDataGrid = <T extends { id: number | string }>({
           sx={{
             flex: 1,
             border: 0,
+            backgroundColor: muiTheme?.palette.background.paper,
+            color: muiTheme?.palette.text.primary,
             '--DataGrid-containerBackground': 'transparent',
             '& .MuiDataGrid-main': {
               flexGrow: 1,
               minHeight: 0,
             },
             '& .MuiDataGrid-columnHeaders': {
-              lineHeight: '1.2',
-              fontSize: 13,
+              lineHeight: 1.2,
+              fontSize: muiTheme?.typography.body2?.fontSize ?? 13,
+              color: muiTheme?.palette.text.secondary,
             },
             '& .MuiDataGrid-cell': {
-              lineHeight: '1.2',
-              fontSize: 13,
+              lineHeight: 1.2,
+              fontSize: muiTheme?.typography.body2?.fontSize ?? 13,
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontWeight: muiTheme?.typography.fontWeightBold ?? 700,
             },
           }}
         />

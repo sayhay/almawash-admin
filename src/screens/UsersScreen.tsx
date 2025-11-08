@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native-paper';
+import { Button, Chip, Dialog, FAB, Portal, Text as PaperText, TextInput } from 'react-native-paper';
 
 import client from '@/api/client';
 import { ApiError } from '@/api/errors';
@@ -13,6 +13,9 @@ import { USER_ROLES, USER_STATUSES } from '@/utils/constants';
 import type { AdminUser, AdminUserRequest } from '@/utils/types';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { validateUserForm } from '@/utils/validation';
+import { Box } from '@/theme';
+import { Section } from '@/ui/Section';
+import { PrimaryButton } from '@/ui/PrimaryButton';
 
 type UsersFilter = {
   role?: string;
@@ -204,43 +207,55 @@ const UsersScreen: React.FC = () => {
     [filter?.role, filter?.status, setFilter],
   );
 
+  const handleExport = useCallback(() => {
+    // TODO: brancher l'export CSV sur l'endpoint d'administration dès qu'il sera disponible
+  }, []);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.gridContainer}>
-        <DataGridX<UserRow>
-          rows={rows}
-          columns={columns}
-          loading={loading}
-          rowCount={rowCount}
-          serverMode
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          sortModel={sortModel}
-          onSortModelChange={setSortModel}
-          emptyText="Aucun utilisateur"
-          toolbar={
-            <ServerToolbar
-              searchPlaceholder="Rechercher un email"
-              searchValue={search}
-              onSearch={(query) => setSearch(query || undefined)}
-              filters={toolbarFilters}
-              onReset={() => {
-                setFilter(() => undefined);
-                setSearch(undefined);
-                setSortModel([]);
-                setPaginationModel((prev) => ({ ...prev, page: 0 }));
-              }}
-              actions={
-                Platform.OS === 'web' ? (
-                  <Button mode="contained" onPress={() => openModal()}>
-                    Nouvel utilisateur
-                  </Button>
-                ) : undefined
-              }
-            />
-          }
-        />
-      </View>
+    <Box flex={1} padding="lg" backgroundColor="background">
+      <Section
+        title="Utilisateurs"
+        subtitle="Gérez les comptes et les statuts des membres Almawash"
+        actions={
+          <Box style={styles.sectionActions}>
+            <Button mode="outlined" onPress={handleExport} icon="download">
+              Export CSV
+            </Button>
+            {Platform.OS === 'web' ? (
+              <PrimaryButton label="Nouvel utilisateur" onPress={() => openModal()} />
+            ) : null}
+          </Box>
+        }
+      >
+        <Box marginBottom="md">
+          <ServerToolbar
+            searchPlaceholder="Rechercher un email"
+            searchValue={search}
+            onSearch={(query) => setSearch(query || undefined)}
+            filters={toolbarFilters}
+            onReset={() => {
+              setFilter(() => undefined);
+              setSearch(undefined);
+              setSortModel([]);
+              setPaginationModel((prev) => ({ ...prev, page: 0 }));
+            }}
+          />
+        </Box>
+        <Box style={styles.gridContainer}>
+          <DataGridX<UserRow>
+            rows={rows}
+            columns={columns}
+            loading={loading}
+            rowCount={rowCount}
+            serverMode
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            sortModel={sortModel}
+            onSortModelChange={setSortModel}
+            emptyText="Aucun utilisateur"
+          />
+        </Box>
+      </Section>
 
       <Portal>
         <Dialog visible={visible} onDismiss={closeModal}>
@@ -259,9 +274,9 @@ const UsersScreen: React.FC = () => {
               onChangeText={(text) => setForm((prev) => ({ ...prev, phone: text }))}
               style={styles.input}
             />
-            <Text variant="labelLarge" style={styles.label}>
+            <PaperText variant="labelLarge" style={styles.label}>
               Rôle
-            </Text>
+            </PaperText>
             <View style={styles.filterRow}>
               {USER_ROLES.map((role) => (
                 <Chip
@@ -274,9 +289,9 @@ const UsersScreen: React.FC = () => {
                 </Chip>
               ))}
             </View>
-            <Text variant="labelLarge" style={styles.label}>
+            <PaperText variant="labelLarge" style={styles.label}>
               Statut
-            </Text>
+            </PaperText>
             <View style={styles.filterRow}>
               {USER_STATUSES.map((status) => (
                 <Chip
@@ -301,17 +316,11 @@ const UsersScreen: React.FC = () => {
       </Portal>
 
       {Platform.OS !== 'web' ? <FAB icon="plus" style={styles.fab} onPress={() => openModal()} loading={saving} /> : null}
-    </View>
+    </Box>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    minWidth: 0,
-    minHeight: 0,
-  },
   gridContainer: {
     flex: 1,
     width: '100%',
@@ -346,6 +355,11 @@ const styles = StyleSheet.create({
   },
   label: {
     marginTop: 16,
+  },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
 });
 
