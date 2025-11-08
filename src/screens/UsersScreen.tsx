@@ -1,72 +1,116 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import type { AxiosResponse } from 'axios';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native-paper';
 
-import { ErrorMessage } from '../components/ErrorMessage';
-import { Loader } from '../components/Loader';
-import { DataTable } from '../components/DataTable';
-import { useApi } from '../hooks/useApi';
-import { client } from '../api/client';
-import { ApiError } from '../api/errors';
-import { formatDate } from '../utils/formatters';
-import { USER_ROLES, USER_STATUSES } from '../utils/constants';
-import type { AdminUser, AdminUserRequest } from '../utils/types';
-import { validateUserForm } from '../utils/validation';
+import client from '@/api/client';
+import { ApiError } from '@/api/errors';
+import { useApi } from '@/hooks/useApi';
+import { useServerGrid } from '@/hooks/useServerGrid';
+import { DataGridX, GridColumn, ServerToolbar } from '@/ui/table';
+import { formatDate, formatPhone } from '@/utils/format';
+import { USER_ROLES, USER_STATUSES } from '@/utils/constants';
+import type { AdminUser, AdminUserRequest } from '@/utils/types';
+import { ErrorMessage } from '@/components/ErrorMessage';
+import { validateUserForm } from '@/utils/validation';
+
+type UsersFilter = {
+  role?: string;
+  status?: string;
+};
+
+type UsersResponse =
+  | AdminUser[]
+  | {
+      items?: AdminUser[];
+      content?: AdminUser[];
+      data?: AdminUser[];
+      total?: number;
+      totalElements?: number;
+    };
+
+type UserRow = AdminUser;
+
+const parseUsers = (payload: UsersResponse): AdminUser[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload.items)) {
+    return payload.items;
+  }
+
+  if (Array.isArray(payload.content)) {
+    return payload.content;
+  }
+
+  if (Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  return [];
+};
+
+const extractTotal = (response: AxiosResponse<UsersResponse>, fallbackLength: number): number => {
+  const headerTotal = response.headers?.['x-total-count'] as string | undefined;
+  if (typeof headerTotal === 'string') {
+    const parsed = Number(headerTotal);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  const data = response.data;
+  if (data && !Array.isArray(data)) {
+    if (typeof data.total === 'number') {
+      return data.total;
+    }
+    if (typeof data.totalElements === 'number') {
+      return data.totalElements;
+    }
+  }
+
+  return fallbackLength;
+};
 
 const UsersScreen: React.FC = () => {
-  const [roleFilter, setRoleFilter] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
-  const [form, setForm] = useState<AdminUserRequest>({ email: '', phone: '', role: 'PROVIDER', active: true });
+  const [form, setForm] = useState<AdminUserRequest & { active: boolean }>({
+    email: '',
+    phone: '',
+    role: 'PROVIDER',
+    active: true,
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<AdminUser | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
   const { run } = useApi();
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setFetchError(undefined);
-    try {
-      const response = await run(
-        client.get<AdminUser[]>('/api/admin/users', {
-          params: {
-            role: roleFilter ?? undefined,
-            status: statusFilter ?? undefined,
-          },
-        }),
-      );
-      setUsers(response.data ?? []);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setFetchError(error.message);
-      } else {
-        setFetchError('Une erreur est survenue');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [roleFilter, run, statusFilter]);
+  const { rows, total, loading, pagination, filter, setPagination, setSearch, setFilter, refresh } = useServerGrid<UserRow, UsersFilter | undefined>({
+    initialPageSize: 10,
+    fetchPage: async ({ page, pageSize, sortField, sortDirection, search, filter: currentFilter }) => {
+      const params: Record<string, unknown> = {
+        page,
+        size: pageSize,
+        sort: sortField ? `${sortField},${sortDirection ?? 'asc'}` : undefined,
+        role: currentFilter?.role,
+        status: currentFilter?.status,
+        email: search,
+      };
 
-  useEffect(() => {
-    void fetchUsers();
-  }, [fetchUsers]);
+      const response = await client.get<UsersResponse>('/api/admin/users', { params });
+      const data = response.data;
+      const parsedRows = parseUsers(data ?? []);
+      const totalElements = extractTotal(response, parsedRows.length);
 
-  const filteredUsers = useMemo(() => {
-    if (!users) return [];
-    return users.filter((user) => {
-      const roleMatch = roleFilter ? user.role === roleFilter : true;
-      const statusMatch = statusFilter ? `${user.active ? 'ACTIVE' : 'INACTIVE'}` === statusFilter : true;
-      return roleMatch && statusMatch;
-    });
-  }, [users, roleFilter, statusFilter]);
+      return { rows: parsedRows, total: totalElements };
+    },
+  });
 
-  const openModal = (user?: AdminUser) => {
+  const openModal = useCallback((user?: AdminUser) => {
     if (user) {
-      setForm({ email: user.email, phone: user.phone, role: user.role, active: user.active ?? true });
+      setForm({ email: user.email, phone: user.phone ?? '', role: user.role, active: user.active ?? true });
       setEditing(user);
     } else {
       setForm({ email: '', phone: '', role: 'PROVIDER', active: true });
@@ -74,18 +118,19 @@ const UsersScreen: React.FC = () => {
     }
     setErrors({});
     setVisible(true);
-  };
+  }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setVisible(false);
-  };
+  }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     const validation = validateUserForm({ ...form, status: form.active ? 'ACTIVE' : 'INACTIVE' });
     if (Object.values(validation).some(Boolean)) {
       setErrors(validation as Record<string, string>);
       return;
     }
+
     setErrors({});
     setSaving(true);
     try {
@@ -95,7 +140,7 @@ const UsersScreen: React.FC = () => {
         await run(client.post('/api/admin/users', form));
       }
       closeModal();
-      await fetchUsers();
+      await refresh();
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.details && Object.keys(error.details).length > 0) {
@@ -109,94 +154,140 @@ const UsersScreen: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [closeModal, editing, form, refresh, run]);
 
-  const handleDelete = async (user: AdminUser) => {
-    try {
-      await run(client.delete(`/api/admin/users/${user.id}`));
-      await fetchUsers();
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrors({ general: error.message });
-      } else {
-        setErrors({ general: 'Impossible de supprimer cet utilisateur' });
+  const handleDelete = useCallback(
+    async (user: AdminUser) => {
+      try {
+        await run(client.delete(`/api/admin/users/${user.id}`));
+        await refresh();
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setErrors({ general: error.message });
+        } else {
+          setErrors({ general: 'Impossible de supprimer cet utilisateur' });
+        }
       }
-    }
-  };
+    },
+    [refresh, run],
+  );
 
-  if (loading && users.length === 0) {
-    return <Loader />;
-  }
+  const columns = useMemo<GridColumn<UserRow>[]>(
+    () => [
+      { field: 'email', headerName: 'Email', flex: 1, sortable: true },
+      {
+        field: 'phone',
+        headerName: 'Téléphone',
+        width: 160,
+        renderCell: ({ row }) => formatPhone(row.phone),
+      },
+      { field: 'role', headerName: 'Rôle', width: 140, sortable: true },
+      {
+        field: 'active',
+        headerName: 'Statut',
+        width: 140,
+        sortable: false,
+        renderCell: ({ row }) => (row.active ? 'Actif' : 'Inactif'),
+      },
+      {
+        field: 'createdAt',
+        headerName: 'Créé le',
+        width: 160,
+        sortable: true,
+        renderCell: ({ row }) => (row.createdAt ? formatDate(row.createdAt) : '—'),
+      },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 200,
+        sortable: false,
+        renderCell: ({ row }) => (
+          <View style={styles.rowActions}>
+            <Button mode="text" compact style={styles.rowActionButton} onPress={() => openModal(row)}>
+              Modifier
+            </Button>
+            <Button mode="text" compact onPress={() => handleDelete(row)}>
+              Supprimer
+            </Button>
+          </View>
+        ),
+      },
+    ],
+    [handleDelete, openModal],
+  );
+
+  const toolbarFilters = useMemo(
+    () => [
+      {
+        key: 'role',
+        label: 'Rôle',
+        value: filter?.role ?? undefined,
+        options: [{ label: 'Tous', value: undefined }, ...USER_ROLES.map((role) => ({ label: role, value: role }))],
+        onChange: (value: string | number | null | undefined) => {
+          setFilter((prev) => ({ ...(prev ?? {}), role: typeof value === 'string' ? value : undefined }));
+        },
+      },
+      {
+        key: 'status',
+        label: 'Statut',
+        value: filter?.status ?? undefined,
+        options: [
+          { label: 'Tous', value: undefined },
+          { label: 'Actif', value: 'ACTIVE' },
+          { label: 'Inactif', value: 'INACTIVE' },
+        ],
+        onChange: (value: string | number | null | undefined) => {
+          setFilter((prev) => ({ ...(prev ?? {}), status: typeof value === 'string' ? value : undefined }));
+        },
+      },
+    ],
+    [filter?.role, filter?.status, setFilter],
+  );
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.filters}>
-          <Text variant="titleMedium">Filtres</Text>
-          <View style={styles.filterRow}>
-            {USER_ROLES.map((role) => (
-              <Chip
-                key={role}
-                style={styles.filterChip}
-                selected={roleFilter === role}
-                onPress={() => setRoleFilter(roleFilter === role ? null : role)}
-              >
-                {role}
-              </Chip>
-            ))}
-          </View>
-          <View style={styles.filterRow}>
-            {USER_STATUSES.map((status) => (
-              <Chip
-                key={status}
-                style={styles.filterChip}
-                selected={statusFilter === status}
-                onPress={() => setStatusFilter(statusFilter === status ? null : status)}
-              >
-                {status === 'ACTIVE' ? 'Actif' : 'Inactif'}
-              </Chip>
-            ))}
-          </View>
-        </View>
-
-        {fetchError ? <ErrorMessage message={fetchError} /> : null}
-
-        <DataTable<AdminUser>
-          data={filteredUsers}
-          columns={[
-            { key: 'email', title: 'Email' },
-            { key: 'phone', title: 'Téléphone' },
-            { key: 'role', title: 'Rôle' },
-            {
-              key: 'active',
-              title: 'Statut',
-              render: (user) => (user.active ? 'Actif' : 'Inactif'),
-            },
-            {
-              key: 'createdAt',
-              title: 'Créé le',
-              render: (user) => formatDate(user.createdAt),
-            },
-          ]}
-          actions={(user) => (
-            <View style={styles.rowActions}>
-              <Button mode="text" compact style={styles.rowActionButton} onPress={() => openModal(user)}>
-                Modifier
-              </Button>
-              <Button mode="text" compact style={styles.rowActionButton} onPress={() => handleDelete(user)}>
-                Supprimer
-              </Button>
-            </View>
-          )}
-          emptyMessage="Aucun utilisateur"
+      <View style={styles.gridContainer}>
+        <DataGridX<UserRow>
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          rowCount={total}
+          serverMode
+          pagination={pagination}
+          onPaginationChange={setPagination}
+          emptyText="Aucun utilisateur"
+          toolbar={
+            <ServerToolbar
+              searchPlaceholder="Rechercher un email"
+              searchValue={pagination.search ?? ''}
+              onSearch={(query) => setSearch(query || undefined)}
+              filters={toolbarFilters}
+              onReset={() => {
+                setFilter(() => undefined);
+                setPagination((prev) => ({ ...prev, page: 0, search: undefined, sortField: undefined, sortDirection: undefined }));
+              }}
+              actions={
+                Platform.OS === 'web' ? (
+                  <Button mode="contained" onPress={() => openModal()}>
+                    Nouvel utilisateur
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
         />
-      </ScrollView>
+      </View>
 
       <Portal>
         <Dialog visible={visible} onDismiss={closeModal}>
           <Dialog.Title>{editing ? 'Modifier un utilisateur' : 'Nouvel utilisateur'}</Dialog.Title>
           <Dialog.Content>
-            <TextInput label="Email" value={form.email} onChangeText={(text) => setForm((prev) => ({ ...prev, email: text }))} />
+            <TextInput
+              label="Email"
+              value={form.email}
+              onChangeText={(text) => setForm((prev) => ({ ...prev, email: text }))}
+              autoCapitalize="none"
+            />
             <ErrorMessage message={errors.email} />
             <TextInput
               label="Téléphone"
@@ -245,7 +336,7 @@ const UsersScreen: React.FC = () => {
         </Dialog>
       </Portal>
 
-      <FAB icon="plus" style={styles.fab} onPress={() => openModal()} loading={saving} />
+      {Platform.OS !== 'web' ? <FAB icon="plus" style={styles.fab} onPress={() => openModal()} loading={saving} /> : null}
     </View>
   );
 };
@@ -253,12 +344,11 @@ const UsersScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollContent: {
     padding: 16,
   },
-  filters: {
-    marginBottom: 16,
+  gridContainer: {
+    flex: 1,
+    width: '100%',
   },
   filterRow: {
     flexDirection: 'row',
@@ -271,6 +361,8 @@ const styles = StyleSheet.create({
   },
   rowActions: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   rowActionButton: {
     marginRight: 8,

@@ -2,13 +2,13 @@ import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
 
-import { ChartView } from '../components/ChartView';
-import { DataTable } from '../components/DataTable';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { Loader } from '../components/Loader';
-import { useFetch } from '../hooks/useFetch';
-import { formatCurrency } from '../utils/formatters';
-import type { AdminStatsResponse, RevenuePoint, TopProvider } from '../utils/types';
+import { ChartView } from '@/components/ChartView';
+import { ErrorMessage } from '@/components/ErrorMessage';
+import { Loader } from '@/components/Loader';
+import { DataGridX, GridColumn } from '@/ui/table';
+import { useFetch } from '@/hooks/useFetch';
+import { formatCurrencyEUR } from '@/utils/format';
+import type { AdminStatsResponse, RevenuePoint, TopProvider } from '@/utils/types';
 
 const StatsScreen: React.FC = () => {
   const {
@@ -27,6 +27,33 @@ const StatsScreen: React.FC = () => {
       .map(([month, value]) => ({ month, value }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [revenueData, stats]);
+
+  const revenueColumns = useMemo<GridColumn<RevenuePoint & { id: string }>[]>(
+    () => [
+      { field: 'month', headerName: 'Mois', flex: 1 },
+      {
+        field: 'value',
+        headerName: 'Montant',
+        width: 160,
+        align: 'right',
+        renderCell: ({ row }) => formatCurrencyEUR(row.value),
+      },
+    ],
+    [],
+  );
+
+  const providerColumns = useMemo<GridColumn<TopProvider & { id: string }>[]>(
+    () => [
+      { field: 'name', headerName: 'Prestataire', flex: 1 },
+      {
+        field: 'completed',
+        headerName: 'Réservations complétées',
+        width: 200,
+        align: 'right',
+      },
+    ],
+    [],
+  );
 
   if (loading && !stats) {
     return <Loader />;
@@ -75,13 +102,10 @@ const StatsScreen: React.FC = () => {
       <Card style={styles.revenueCard}>
         <Card.Title title="Répartition des revenus" subtitle="Montants mensuels" />
         <Card.Content>
-          <DataTable<RevenuePoint>
-            data={revenuePoints}
-            columns={[
-              { key: 'month', title: 'Mois' },
-              { key: 'value', title: 'Montant', render: (item) => formatCurrency(item.value) },
-            ]}
-            emptyMessage="Aucune donnée de revenus"
+          <DataGridX<RevenuePoint & { id: string }>
+            rows={revenuePoints.map((point) => ({ ...point, id: point.month }))}
+            columns={revenueColumns}
+            emptyText="Aucune donnée de revenus"
           />
         </Card.Content>
       </Card>
@@ -89,13 +113,10 @@ const StatsScreen: React.FC = () => {
       <Card style={styles.providersCard}>
         <Card.Title title="Top prestataires" />
         <Card.Content>
-          <DataTable<TopProvider>
-            data={stats?.topProviders ?? []}
-            columns={[
-              { key: 'name', title: 'Prestataire' },
-              { key: 'completed', title: 'Réservations complétées', numeric: true },
-            ]}
-            emptyMessage="Aucun prestataire"
+          <DataGridX<TopProvider & { id: string }>
+            rows={(stats?.topProviders ?? []).map((provider, index) => ({ ...provider, id: `${provider.name}-${index}` }))}
+            columns={providerColumns}
+            emptyText="Aucun prestataire"
           />
         </Card.Content>
       </Card>
