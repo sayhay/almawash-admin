@@ -2,14 +2,17 @@ import * as React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, DataTable as PaperDataTable, Text } from 'react-native-paper';
 
-import type { DataGridXProps, GridColumn, ServerPager } from './types';
+import type {
+  DataGridXProps,
+  GridColumn,
+  GridPaginationModel,
+  GridSortModel,
+} from './types';
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 type NativeDataTableProps<T extends { id: number | string }> = DataGridXProps<T>;
-
-type SortState = { field?: string; direction?: 'asc' | 'desc' };
 
 const getCellValue = <T extends { id: number | string }>(row: T, column: GridColumn<T>) => {
   const rawValue = (row as Record<string, unknown>)[column.field as keyof T];
@@ -35,48 +38,48 @@ export const NativeDataTable = <T extends { id: number | string }>({
   rowCount,
   loading = false,
   serverMode = false,
-  pagination,
-  onPaginationChange,
+  paginationModel,
+  onPaginationModelChange,
+  sortModel,
+  onSortModelChange,
   onRowClick,
   getRowId = (row: T) => row.id,
   toolbar,
   emptyText = 'Aucune donnée',
 }: NativeDataTableProps<T>) => {
-  const isControlled = Boolean(serverMode && pagination);
-  const [localPager, setLocalPager] = React.useState<ServerPager>({
+  const isServerControlled = Boolean(serverMode && paginationModel);
+  const [localPagination, setLocalPagination] = React.useState<GridPaginationModel>({
     page: 0,
-    pageSize: pagination?.pageSize ?? DEFAULT_PAGE_SIZE,
+    pageSize: paginationModel?.pageSize ?? DEFAULT_PAGE_SIZE,
   });
 
-  const effectivePager = isControlled ? (pagination as ServerPager) : localPager;
+  const effectivePagination: GridPaginationModel = isServerControlled
+    ? (paginationModel as GridPaginationModel)
+    : localPagination;
 
   React.useEffect(() => {
-    if (serverMode && pagination) {
-      setLocalPager({ ...pagination });
+    if (serverMode && paginationModel) {
+      setLocalPagination({ ...paginationModel });
     }
-  }, [pagination, serverMode]);
+  }, [paginationModel, serverMode]);
 
-  const [sortState, setSortState] = React.useState<SortState>({
-    field: pagination?.sortField,
-    direction: pagination?.sortDirection,
-  });
+  const [localSortModel, setLocalSortModel] = React.useState<GridSortModel>(sortModel ?? []);
 
   React.useEffect(() => {
-    if (serverMode && pagination) {
-      setSortState({ field: pagination.sortField, direction: pagination.sortDirection });
+    if (serverMode) {
+      setLocalSortModel(sortModel ?? []);
     }
-  }, [pagination?.sortDirection, pagination?.sortField, serverMode]);
+  }, [serverMode, sortModel]);
+
+  const activeSortModel = serverMode ? sortModel ?? [] : localSortModel;
+  const activeSort = activeSortModel[0];
 
   const sortedRows = React.useMemo(() => {
-    if (serverMode) {
+    if (serverMode || !activeSort?.field) {
       return rows;
     }
 
-    if (!sortState.field) {
-      return rows;
-    }
-
-    const column = columns.find((col) => String(col.field) === sortState.field);
+    const column = columns.find((col) => String(col.field) === activeSort.field);
     if (!column) {
       return rows;
     }
@@ -87,38 +90,38 @@ export const NativeDataTable = <T extends { id: number | string }>({
       return compareValues(left, right);
     });
 
-    if (sortState.direction === 'desc') {
+    if (activeSort.sort === 'desc') {
       sorted.reverse();
     }
 
     return sorted;
-  }, [columns, rows, serverMode, sortState.direction, sortState.field]);
+  }, [activeSort?.field, activeSort?.sort, columns, rows, serverMode]);
 
   const paginatedRows = React.useMemo(() => {
     if (serverMode) {
       return rows;
     }
 
-    const start = effectivePager.page * effectivePager.pageSize;
-    return sortedRows.slice(start, start + effectivePager.pageSize);
-  }, [effectivePager.page, effectivePager.pageSize, rows, serverMode, sortedRows]);
+    const start = effectivePagination.page * effectivePagination.pageSize;
+    return sortedRows.slice(start, start + effectivePagination.pageSize);
+  }, [effectivePagination.page, effectivePagination.pageSize, rows, serverMode, sortedRows]);
 
   const totalItems = serverMode ? rowCount ?? rows.length : rows.length;
-  const numberOfPages = Math.max(1, Math.ceil(totalItems / effectivePager.pageSize));
+  const numberOfPages = Math.max(1, Math.ceil(totalItems / effectivePagination.pageSize));
 
   const handleChangePage = (page: number) => {
-    if (serverMode && onPaginationChange && pagination) {
-      onPaginationChange({ ...pagination, page });
+    if (serverMode && paginationModel && onPaginationModelChange) {
+      onPaginationModelChange({ ...paginationModel, page });
     } else {
-      setLocalPager((prev) => ({ ...prev, page }));
+      setLocalPagination((prev) => ({ ...prev, page }));
     }
   };
 
   const handleChangePageSize = (pageSize: number) => {
-    if (serverMode && onPaginationChange && pagination) {
-      onPaginationChange({ ...pagination, page: 0, pageSize });
+    if (serverMode && paginationModel && onPaginationModelChange) {
+      onPaginationModelChange({ ...paginationModel, page: 0, pageSize });
     } else {
-      setLocalPager({ page: 0, pageSize });
+      setLocalPagination({ page: 0, pageSize });
     }
   };
 
@@ -128,18 +131,24 @@ export const NativeDataTable = <T extends { id: number | string }>({
     }
 
     const field = String(column.field);
-    const isSameField = sortState.field === field;
-    const nextDirection: 'asc' | 'desc' | undefined = isSameField && sortState.direction === 'asc' ? 'desc' : 'asc';
+    const current = (serverMode ? sortModel : localSortModel)?.[0];
+    const isSameField = current?.field === field;
+    const nextDirection: 'asc' | 'desc' | undefined = isSameField
+      ? current?.sort === 'asc'
+        ? 'desc'
+        : undefined
+      : 'asc';
 
-    if (serverMode && onPaginationChange && pagination) {
-      onPaginationChange({
-        ...pagination,
-        page: 0,
-        sortField: field,
-        sortDirection: nextDirection,
-      });
+    const nextModel: GridSortModel = nextDirection ? [{ field, sort: nextDirection }] : [];
+
+    if (serverMode && onSortModelChange) {
+      onSortModelChange(nextModel);
+      if (paginationModel && onPaginationModelChange && paginationModel.page !== 0) {
+        onPaginationModelChange({ ...paginationModel, page: 0 });
+      }
     } else {
-      setSortState({ field, direction: nextDirection });
+      setLocalSortModel(nextModel);
+      setLocalPagination((prev) => (prev.page === 0 ? prev : { ...prev, page: 0 }));
     }
   };
 
@@ -152,8 +161,8 @@ export const NativeDataTable = <T extends { id: number | string }>({
         <PaperDataTable style={styles.table}>
           <PaperDataTable.Header>
             {columns.map((column) => {
-              const isSorted = sortState.field === String(column.field);
-              const icon = isSorted ? (sortState.direction === 'desc' ? 'arrow-down' : 'arrow-up') : undefined;
+              const isSorted = activeSort?.field === String(column.field);
+              const icon = isSorted ? (activeSort?.sort === 'desc' ? 'arrow-down' : 'arrow-up') : undefined;
 
               return (
                 <PaperDataTable.Title
@@ -205,16 +214,16 @@ export const NativeDataTable = <T extends { id: number | string }>({
         </View>
       ) : null}
 
-      {totalItems > effectivePager.pageSize ? (
+      {totalItems > effectivePagination.pageSize ? (
         <PaperDataTable.Pagination
-          page={effectivePager.page}
+          page={effectivePagination.page}
           numberOfPages={numberOfPages}
           onPageChange={handleChangePage}
-          label={`${Math.min(totalItems, effectivePager.page * effectivePager.pageSize + 1)}-${Math.min(
+          label={`${Math.min(totalItems, effectivePagination.page * effectivePagination.pageSize + 1)}-${Math.min(
             totalItems,
-            (effectivePager.page + 1) * effectivePager.pageSize,
+            (effectivePagination.page + 1) * effectivePagination.pageSize,
           )} sur ${totalItems}`}
-          numberOfItemsPerPage={effectivePager.pageSize}
+          numberOfItemsPerPage={effectivePagination.pageSize}
           showFastPaginationControls
           numberOfItemsPerPageList={PAGE_SIZE_OPTIONS}
           onItemsPerPageChange={handleChangePageSize}
