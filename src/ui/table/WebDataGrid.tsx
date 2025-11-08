@@ -140,19 +140,31 @@ export const WebDataGrid = <T extends { id: number | string }>({
 
   const effectiveRowCount = serverMode ? rowCount ?? rows.length : rows.length;
 
+  const isServer = serverMode === true;
+
   return (
-    <Box sx={{ width: '100%', flexGrow: 1, minWidth: 0 }}>
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        minHeight: 0,
+      }}
+    >
       <DataGrid
-        autoHeight
+        autoHeight={!isServer}
         rows={rows}
         columns={gridColumns}
         loading={loading}
-        paginationMode={serverMode ? 'server' : 'client'}
-        sortingMode={serverMode ? 'server' : 'client'}
+        paginationMode={isServer ? 'server' : 'client'}
+        sortingMode={isServer ? 'server' : 'client'}
         rowCount={effectiveRowCount}
         paginationModel={paginationModel ? { page: paginationModel.page, pageSize: paginationModel.pageSize } : undefined}
         onPaginationModelChange={paginationModel ? handlePaginationModelChange : undefined}
-        onSortModelChange={serverMode ? handleSortModelChange : undefined}
+        onSortModelChange={isServer ? handleSortModelChange : undefined}
         disableRowSelectionOnClick
         getRowId={getRowId}
         onRowClick={onRowClick ? (params: GridRowParams<T>) => onRowClick(params.row as T) : undefined}
@@ -163,13 +175,18 @@ export const WebDataGrid = <T extends { id: number | string }>({
         localeText={frLocaleText}
         pageSizeOptions={[5, 10, 20, 50]}
         sx={{
+          flex: 1,
           border: 0,
           '--DataGrid-containerBackground': 'transparent',
-          '& .MuiDataGrid-cell': {
+          '& .MuiDataGrid-main': {
+            flexGrow: 1,
+            minHeight: 0,
+          },
+          '& .MuiDataGrid-columnHeaders': {
             lineHeight: '1.2',
             fontSize: 13,
           },
-          '& .MuiDataGrid-columnHeaders': {
+          '& .MuiDataGrid-cell': {
             lineHeight: '1.2',
             fontSize: 13,
           },
