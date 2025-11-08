@@ -86,6 +86,8 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
+export default client;
+
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
