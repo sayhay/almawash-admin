@@ -5,7 +5,7 @@ import { Button, Chip, Dialog, FAB, Portal, Text, TextInput } from 'react-native
 import client from '@/api/client';
 import { ApiError } from '@/api/errors';
 import { useApi } from '@/hooks/useApi';
-import { useServerGrid } from '@/hooks/useServerGrid';
+import { MapParamsArgs, useServerGrid } from '@/hooks/useServerGrid';
 import { DataGridX, GridColumn } from '@/ui/table';
 import { ServerToolbar } from '@/ui/table/ServerToolbar';
 import { formatDate, formatPhone } from '@/utils/format';
@@ -34,6 +34,21 @@ const UsersScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const { run } = useApi();
+  const mapUsersParams = useCallback(
+    ({ page, pageSize, sortModel: currentSort, search: searchQuery, filter: currentFilter }: MapParamsArgs<UsersFilter>) => {
+      const [sort] = currentSort;
+      return {
+        page,
+        size: pageSize,
+        ...(sort ? { sort: `${sort.field},${sort.sort}` } : {}),
+        ...(currentFilter?.role ? { role: currentFilter.role } : {}),
+        ...(currentFilter?.status ? { status: currentFilter.status } : {}),
+        ...(searchQuery ? { email: searchQuery } : {}),
+      };
+    },
+    [],
+  );
+
   const {
     rows,
     rowCount,
@@ -50,17 +65,7 @@ const UsersScreen: React.FC = () => {
   } = useServerGrid<UserRow, UsersFilter>({
     endpoint: '/api/admin/users',
     initialPageSize: 10,
-    mapParams: ({ page, pageSize, sortModel: currentSort, search: searchQuery, filter: currentFilter }) => {
-      const [sort] = currentSort;
-      return {
-        page,
-        size: pageSize,
-        ...(sort ? { sort: `${sort.field},${sort.sort}` } : {}),
-        ...(currentFilter?.role ? { role: currentFilter.role } : {}),
-        ...(currentFilter?.status ? { status: currentFilter.status } : {}),
-        ...(searchQuery ? { email: searchQuery } : {}),
-      };
-    },
+    mapParams: mapUsersParams,
   });
 
   const openModal = useCallback((user?: AdminUser) => {
