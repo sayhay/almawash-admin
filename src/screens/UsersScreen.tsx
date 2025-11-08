@@ -348,6 +348,7 @@ const styles = StyleSheet.create({
   },
   gridContainer: {
     flex: 1,
+    width: '100%',
   },
   filterRow: {
     flexDirection: 'row',

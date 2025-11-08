@@ -141,7 +141,7 @@ export const WebDataGrid = <T extends { id: number | string }>({
   const effectiveRowCount = serverMode ? rowCount ?? rows.length : rows.length;
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: '100%', flexGrow: 1, minWidth: 0 }}>
       <DataGrid
         autoHeight
         rows={rows}
